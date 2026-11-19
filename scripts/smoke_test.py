@@ -2,7 +2,7 @@
 """Boot Volcanoids with a mod's developer capture, then report its log and screenshots.
 
 Linux only. The game runs straight from its install (not through Steam), loads a save, lets the mod photograph the
-requested times of day, and quits. On Hyprland it opens on the hidden special:agent workspace with its sound sent to
+requested moments (times of day, storms), and quits. On Hyprland it opens on the hidden special:agent workspace with its sound sent to
 a null sink, so it neither takes over the screen nor makes noise.
 
 The game never touches the player's own data folder. Unity keeps its data under $XDG_CONFIG_HOME on Linux, so each
@@ -13,6 +13,7 @@ as the game, so a test that wrote there (even temporarily) could push its autosa
     scripts/smoke_test.py day-night-cycle --save Slot02 --shots "15,29,31,40@0.5,40@0"
     scripts/smoke_test.py day-night-cycle --save-file spot.sav --shots "40@0.5"     # a save from anywhere
     scripts/smoke_test.py day-night-cycle --save Slot02 --shots "40" --workshop     # the subscribed Workshop copy
+    scripts/smoke_test.py weather --save-file spot.sav --shots "thunder@0.5" --with day-night-cycle   # both mods
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,21 @@ from mods import (  # noqa: E402
 STEAM_APP_ID = "951440"
 SILENT_SINK = "volcanoid_mods_smoke_test"
 GAME_PROCESS_PATTERN = "[V]olcanoids.x86_64"
-LOG_PREFIX = "[DayNightCycle]"
+
+
+class Capture(NamedTuple):
+    """A mod's developer capture: the options that start it, and the prefix on its log lines."""
+
+    directory_option: str
+    shots_option: str
+    log_prefix: str
+
+
+# Every mod's developer capture. The mod under test runs its capture; mods added with --with run as players have them.
+CAPTURES = {
+    "day-night-cycle": Capture("-daynight-capture", "-daynight-shots", "[DayNightCycle]"),
+    "weather": Capture("-weather-capture", "-weather-shots", "[Weather]"),
+}
 # The load-time scene report ("probe DC (0.186, ...") and every capture ("baseline ambient 0.186").
 BASELINE_PATTERN = re.compile(r"(?:probe DC \(|baseline ambient )(-?[0-9.]+)")
 
@@ -63,11 +79,19 @@ SETTINGS_FILES = ("options.json", "prefs")
 # ========================================================================================
 
 
-def build_sandbox(run_dir: Path, data_dir: Path, mod: str, save: Path, use_workshop: bool) -> Path:
+def build_sandbox(
+    run_dir: Path,
+    data_dir: Path,
+    mod: str,
+    companions: list[str],
+    save: Path,
+    use_workshop: bool,
+) -> Path:
     """Lay out a private data folder for the test game and return its XDG_CONFIG_HOME.
 
     The game's data folder is <XDG_CONFIG_HOME>/unity3d/<company>/<product>; the same company/product path as the
-    player's folder is kept, so the game finds it.
+    player's folder is kept, so the game finds it. The companions are other mods installed alongside the one under
+    test (always fresh local builds), for testing mods together.
     """
     config_home = run_dir / "config"
     sandbox = config_home / data_dir.relative_to(data_dir.parents[2])
@@ -77,19 +101,24 @@ def build_sandbox(run_dir: Path, data_dir: Path, mod: str, save: Path, use_works
             shutil.copy2(data_dir / name, sandbox / name)
     shutil.copy2(save, sandbox / "Saves" / save.name)
 
-    title = load_manifest(mod)["Title"]
-    if use_workshop:
-        item_id = read_workshop_item_id(mod)
-        if not item_id:
-            raise SystemExit(f"{mod} has no Workshop item to test.")
-        entry = {"Id": int(item_id), "LocalDir": "", "Version": 0, "RequiredOnClients": False, "Title": title}
-    else:
-        shipped_dir = assemble(mod)
+    entries = []
+    for installed in [mod, *companions]:
+        title = load_manifest(installed)["Title"]
+        if use_workshop and installed == mod:
+            item_id = read_workshop_item_id(mod)
+            if not item_id:
+                raise SystemExit(f"{mod} has no Workshop item to test.")
+            entries.append({"Id": int(item_id), "LocalDir": "", "Version": 0, "RequiredOnClients": False,
+                            "Title": title})
+            continue
+        shipped_dir = assemble(installed)
         shutil.copytree(shipped_dir, sandbox / "LocalMods" / shipped_dir.name)
-        local_dir = f"/{shipped_name(mod)}"
-        entry = {"Id": 0, "LocalDir": local_dir, "Version": 0, "RequiredOnClients": False, "Title": title}
-    (sandbox / "mods.json").write_text(json.dumps({"m_mods": [entry]}, indent=4), encoding="utf-8")
-    logger.info(f"[sandbox] {sandbox}: {'Workshop' if use_workshop else 'local'} copy of {mod}, save {save.name}")
+        entries.append({"Id": 0, "LocalDir": f"/{shipped_name(installed)}", "Version": 0, "RequiredOnClients": False,
+                        "Title": title})
+    (sandbox / "mods.json").write_text(json.dumps({"m_mods": entries}, indent=4), encoding="utf-8")
+    source = "Workshop" if use_workshop else "local"
+    alongside = f" with {', '.join(companions)}" if companions else ""
+    logger.info(f"[sandbox] {sandbox}: {source} copy of {mod}{alongside}, save {save.name}")
     return config_home
 
 
@@ -198,14 +227,16 @@ def stop_game() -> None:
 # ========================================================================================
 
 
-def report(log_path: Path, capture_dir: Path) -> None:
+def report(log_path: Path, capture_dir: Path, mods: list[str]) -> None:
     if not log_path.exists():
         logger.error(f"[report] No log at {log_path}; the game may not have started")
         return
     lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    prefixes = [CAPTURES[mod].log_prefix for mod in mods if mod in CAPTURES]
     interesting = [
         line for line in lines
-        if LOG_PREFIX in line or "Exception" in line or "Mod loaded" in line or "Mod loading failed" in line
+        if any(prefix in line for prefix in prefixes)
+        or "Exception" in line or "Mod loaded" in line or "Mod loading failed" in line
     ]
     print("\n".join(interesting[-120:]))
     shots = sorted(capture_dir.glob("*.png"))
@@ -216,9 +247,9 @@ def report(log_path: Path, capture_dir: Path) -> None:
 def check_lighting_baseline(lines: list[str]) -> None:
     """Fail loudly if the game's own ambient light changed during the run.
 
-    The night must only ever change lighting inside a camera's render. If the baseline the capture logs between
-    renders moves, the night has leaked into the game's state: the bug where a lossy ambient-probe round trip drove
-    the island's ambient light to black after the first night, and kept it there all day.
+    The mods must only ever change lighting while the game renders. If the baseline they log between renders moves,
+    a mod has leaked into the game's state: the bug where a lossy ambient-probe round trip drove the island's ambient
+    light to black after the first night, and kept it there all day.
     """
     # The scene report's value comes first: it is read at load, before the night has run a single frame.
     baselines = [float(match.group(1)) for line in lines if (match := BASELINE_PATTERN.search(line))]
@@ -241,11 +272,22 @@ def check_lighting_baseline(lines: list[str]) -> None:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("mod", help="mod folder under mods/")
+    parser.add_argument("mod", help="mod folder under mods/, whose developer capture runs")
+    parser.add_argument(
+        "--with",
+        dest="companions",
+        action="append",
+        default=[],
+        help="another mod to install alongside (repeatable), e.g. --with day-night-cycle",
+    )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--save", help="one of the player's save slots to copy in, e.g. Slot02")
     source.add_argument("--save-file", type=Path, help="a .sav from anywhere, for shots from a fixed spot")
-    parser.add_argument("--shots", required=True, help='minutes since sunrise, e.g. "15,30,40@0.5"')
+    parser.add_argument(
+        "--shots",
+        required=True,
+        help='the mod\'s moments: minutes since sunrise ("15,40@0.5") or storms ("light@0.5,thunder@0.6")',
+    )
     parser.add_argument("--workshop", action="store_true", help="test the subscribed Workshop copy, not a fresh build")
     parser.add_argument("--timeout", type=float, default=300, help="seconds before the game is killed")
     parser.add_argument(
@@ -254,7 +296,11 @@ def main() -> None:
         help='extra arguments for the game, e.g. "-daynight-at 15" to hold noon from the first frame',
     )
     parsed = parser.parse_args()
-    resolve_mods([parsed.mod], use_all=False)
+    resolve_mods([parsed.mod, *parsed.companions], use_all=False)
+    if parsed.mod not in CAPTURES:
+        raise SystemExit(f"{parsed.mod} has no developer capture; add it to CAPTURES in {Path(__file__).name}")
+    if parsed.mod in parsed.companions:
+        raise SystemExit(f"{parsed.mod} is already the mod under test; don't also pass it to --with")
 
     if is_game_running():
         raise SystemExit("Volcanoids is already running. Close it first.")
@@ -268,7 +314,7 @@ def main() -> None:
     run_dir = REPO_ROOT / "dist" / "smoke" / datetime.now().strftime("%Y%m%d-%H%M%S")
     capture_dir = run_dir / "captures"
     run_dir.mkdir(parents=True)
-    config_home = build_sandbox(run_dir, data_dir, parsed.mod, save, parsed.workshop)
+    config_home = build_sandbox(run_dir, data_dir, parsed.mod, parsed.companions, save, parsed.workshop)
     sandbox = config_home / data_dir.relative_to(data_dir.parents[2])
     player_files_before = fingerprint(data_dir)
 
@@ -278,8 +324,8 @@ def main() -> None:
         "+load", save.stem,
         # The save's own mod list may differ from the sandbox's; without this the game would restart to match it.
         "-mods_resolved",
-        "-daynight-capture", str(capture_dir),
-        "-daynight-shots", parsed.shots,
+        CAPTURES[parsed.mod].directory_option, str(capture_dir),
+        CAPTURES[parsed.mod].shots_option, parsed.shots,
         *shlex.split(parsed.game_args),
     ]
     sink_module = open_silent_sink()
@@ -296,7 +342,7 @@ def main() -> None:
                        "sandbox, so this was most likely Steam Cloud syncing; check before trusting the folder.")
     else:
         logger.info(f"[sandbox] {data_dir} was untouched")
-    report(sandbox / "Player.log", capture_dir)
+    report(sandbox / "Player.log", capture_dir, [parsed.mod, *parsed.companions])
 
 
 if __name__ == "__main__":

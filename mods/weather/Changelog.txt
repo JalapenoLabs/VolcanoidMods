@@ -1,0 +1,3 @@
+# Changelog
+
+2026.11.19 - Initial release. Once an hour clouds roll in and it rains for ten minutes: light rain, heavy rain, or a thunderstorm with lightning that can strike players and cogs. Client-side only: players with the mod share the same storms, players without it are unaffected.
