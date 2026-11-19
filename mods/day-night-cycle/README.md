@@ -1,5 +1,7 @@
 # Day/Night Cycle
 
+**[Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3842322377)** · [Releases](https://github.com/JalapenoLabs/VolcanoidMods/releases?q=day-night-cycle) · [Patreon](https://www.jalapenolabs.io/patreon)
+
 A Volcanoids mod that gives the island a **30-minute day and a 20-minute night**.
 
 The sun sinks into a golden-hour sunset, the sky darkens, and the stars come out: 5,500 of them, with the Milky Way
@@ -10,6 +12,16 @@ are bright enough to see by; new-moon nights are pitch black apart from starligh
 At night the world itself goes dark, but nothing that makes its own light does. Lamps, your flashlight, lava, and the
 glow of COGs and drillships stay as bright as ever, so they become what you navigate by. Caves keep their own lighting,
 and the night fades away as you go underground.
+
+## Install
+
+- **Steam Workshop (recommended):** [subscribe on the Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3842322377), then turn it on in the game's Mods
+  menu. Steam keeps it up to date.
+- **By hand:** download the zip from the [latest release](https://github.com/JalapenoLabs/VolcanoidMods/releases?q=day-night-cycle)
+  and unzip it into the game's `LocalMods` folder, so you get `LocalMods/DayNightCycle/`
+  (Windows: `%USERPROFILE%\AppData\LocalLow\Volcanoid\Volcanoids\LocalMods`,
+  Linux: `~/.config/unity3d/Volcanoid/Volcanoids/LocalMods`). Then turn it on in the Mods menu. A save that lists a
+  hand-installed mod cannot host multiplayer; the Workshop copy can.
 
 ## Multiplayer
 
@@ -35,6 +47,10 @@ it, because every copy reads the time of day from the same clock (UTC, checked a
 The night darkens the light reaching the world (the sun, ambient light, sky, reflections and fog), never the finished
 image, which is why light sources keep their strength. The stars, Milky Way and moon are generated when a game loads,
 from fixed seeds, so every player's sky is identical. Design notes: [docs/day-night-cycle.md](../../docs/day-night-cycle.md).
+
+## Support
+
+Patreon: https://www.jalapenolabs.io/patreon
 
 ## Building
 

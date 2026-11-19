@@ -1,7 +1,7 @@
 {
   "UniqueModId": "JalapenoLabs.DayNightCycle",
   "Title": "Day/Night Cycle",
-  "Version": "2026.11.18",
+  "Version": "2026.11.19",
   "Tags": ["Environment", "Visual"],
   "Assemblies": ["JalapenoLabs.DayNightCycle.dll"],
   "MultiplayerMode": 2,

@@ -46,14 +46,22 @@ REQUIRED_MOD_FILES = (
     "Changelog.txt",
     "LICENSE",
     "Content/.manifest.json",
+    "Workshop/description.txt",
 )
 
-# The game and the Workshop accept either; the Workshop caps previews at 1 MB.
+# The game and the Workshop accept either; the Workshop caps every preview image at 1 MB.
 THUMBNAIL_NAMES = (".thumb.png", ".thumb.jpg")
-THUMBNAIL_MAX_BYTES = 1024 * 1024
+PREVIEW_MAX_BYTES = 1024 * 1024
+SCREENSHOT_SUFFIXES = (".jpg", ".png")
 
-# The game writes this next to a local mod after its first Workshop upload; it holds the Workshop item ID.
+# Steam's limits for a Workshop item's title and description (k_cchPublishedDocument*Max).
+WORKSHOP_TITLE_MAX_CHARACTERS = 128
+WORKSHOP_DESCRIPTION_MAX_CHARACTERS = 8000
+
+# The game writes this next to a local mod after its first Workshop upload; its uploader reads it to update the same
+# item. The repo's own record of the ID is Workshop/item-id, so Content/ holds only what ships.
 WORKSHOP_ID_FILE = ".workshop"
+WORKSHOP_ITEM_ID_PATH = "Workshop/item-id"
 
 
 # ========================================================================================
@@ -122,6 +130,24 @@ def shipped_name(mod: str) -> str:
 def load_manifest(mod: str) -> dict:
     manifest_path = MODS_DIR / mod / "Content" / ".manifest.json"
     return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def read_workshop_item_id(mod: str) -> str | None:
+    """The mod's Workshop item ID, or None before its first upload."""
+    id_path = MODS_DIR / mod / WORKSHOP_ITEM_ID_PATH
+    if not id_path.is_file():
+        logger.debug(f"[workshop] mods/{mod}/{WORKSHOP_ITEM_ID_PATH} does not exist; the mod has no Workshop item yet")
+        return None
+    return id_path.read_text(encoding="utf-8").strip()
+
+
+def changelog_entry(mod: str, version: str) -> str | None:
+    """The text of a version's line in the mod's Changelog.txt ("2026.11.19 - What changed."), or None."""
+    prefix = f"{version} - "
+    for line in (MODS_DIR / mod / "Changelog.txt").read_text(encoding="utf-8").splitlines():
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return None
 
 
 def assembly_name(mod: str) -> str:
@@ -216,9 +242,25 @@ def validate_mod(mod: str) -> list[str]:
     thumbnails = [mod_dir / "Content" / name for name in THUMBNAIL_NAMES if (mod_dir / "Content" / name).is_file()]
     if not thumbnails:
         problems.append(f"missing a Workshop thumbnail: Content/{' or Content/'.join(THUMBNAIL_NAMES)}")
-    for thumbnail in thumbnails:
-        if thumbnail.stat().st_size > THUMBNAIL_MAX_BYTES:
-            problems.append(f"{thumbnail.name} is over the Workshop's 1 MB preview limit")
+    screenshots = sorted((mod_dir / "Workshop" / "screenshots").glob("*"))
+    for image in thumbnails + screenshots:
+        if image.suffix not in SCREENSHOT_SUFFIXES and image.name not in THUMBNAIL_NAMES:
+            problems.append(f"{image.relative_to(mod_dir)} is not a .jpg or .png")
+        elif image.stat().st_size > PREVIEW_MAX_BYTES:
+            problems.append(f"{image.relative_to(mod_dir)} is over the Workshop's 1 MB preview limit")
+
+    if (mod_dir / "Content" / WORKSHOP_ID_FILE).exists():
+        problems.append(f"Content/{WORKSHOP_ID_FILE} would ship to players; record the ID in {WORKSHOP_ITEM_ID_PATH}")
+    item_id = read_workshop_item_id(mod)
+    if item_id is not None and not item_id.isdigit():
+        problems.append(f"{WORKSHOP_ITEM_ID_PATH} should hold just the numeric item ID, not '{item_id}'")
+
+    description_path = mod_dir / "Workshop" / "description.txt"
+    if description_path.is_file():
+        length = len(description_path.read_text(encoding="utf-8"))
+        if length > WORKSHOP_DESCRIPTION_MAX_CHARACTERS:
+            problems.append(f"Workshop/description.txt is {length} characters; Steam allows "
+                            f"{WORKSHOP_DESCRIPTION_MAX_CHARACTERS}")
 
     if (mod_dir / "Content" / ".manifest.json").is_file():
         problems += validate_manifest(mod)
@@ -235,10 +277,16 @@ def validate_manifest(mod: str) -> list[str]:
     unique_id = manifest.get("UniqueModId", "")
     if not unique_id.startswith("JalapenoLabs.") or unique_id.count(".") != 1:
         problems.append(f"UniqueModId '{unique_id}' should be 'JalapenoLabs.<ModName>'")
-    if not manifest.get("Title"):
+    title = manifest.get("Title", "")
+    if not title:
         problems.append("manifest has no Title")
-    if not manifest.get("Version"):
+    elif len(title) > WORKSHOP_TITLE_MAX_CHARACTERS:
+        problems.append(f"Title is longer than Steam's {WORKSHOP_TITLE_MAX_CHARACTERS} characters")
+    version = manifest.get("Version")
+    if not version:
         problems.append("manifest has no Version")
+    elif changelog_entry(mod, version) is None:
+        problems.append(f"Changelog.txt has no '{version} - ...' line for the manifest's Version")
     if manifest.get("MultiplayerMode") not in MULTIPLAYER_MODES:
         problems.append(f"MultiplayerMode must be one of {MULTIPLAYER_MODES} (the game reads it as an integer)")
 
@@ -271,7 +319,7 @@ def assemble(mod: str) -> Path:
     shipped_dir = DIST_DIR / shipped_name(mod)
     if shipped_dir.exists():
         shutil.rmtree(shipped_dir)
-    shutil.copytree(MODS_DIR / mod / "Content", shipped_dir)
+    shutil.copytree(MODS_DIR / mod / "Content", shipped_dir, ignore=shutil.ignore_patterns(WORKSHOP_ID_FILE))
     assembly = f"{assembly_name(mod)}.dll"
     shutil.copy2(MODS_DIR / mod / "bin" / assembly, shipped_dir / assembly)
     shipped_files = sorted(path.name for path in shipped_dir.iterdir())
@@ -280,41 +328,39 @@ def assemble(mod: str) -> Path:
 
 
 def command_install(arguments: argparse.Namespace) -> None:
-    """Copy a freshly built mod into the game's LocalMods/, keeping the Workshop ID the game wrote there."""
+    """Copy a freshly built mod into the game's LocalMods/.
+
+    When the mod has a Workshop item, the game's .workshop file is written beside it, so the in-game upload button
+    would update that item rather than create a duplicate.
+    """
     data_dir = require_path(read_settings(), "VOLCANOIDS_DATA_DIR")
     shipped_dir = assemble(arguments.mod)
     target = data_dir / "LocalMods" / shipped_dir.name
 
-    workshop_id = None
-    existing_id_file = target / WORKSHOP_ID_FILE
-    if existing_id_file.is_file():
-        workshop_id = existing_id_file.read_text(encoding="utf-8").strip()
-        if not (shipped_dir / WORKSHOP_ID_FILE).is_file():
-            logger.warning(
-                f"[install] {existing_id_file} holds Workshop ID {workshop_id}, but Content/ has no "
-                f"{WORKSHOP_ID_FILE}. Copy it into mods/{arguments.mod}/Content/ and commit it, or a fresh "
-                "install elsewhere will upload the mod as a new Workshop item."
-            )
-
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(shipped_dir, target)
-    if workshop_id and not (target / WORKSHOP_ID_FILE).is_file():
-        (target / WORKSHOP_ID_FILE).write_text(workshop_id, encoding="utf-8")
+    item_id = read_workshop_item_id(arguments.mod)
+    if item_id:
+        (target / WORKSHOP_ID_FILE).write_text(item_id, encoding="utf-8")
 
     if is_game_running():
         logger.warning("[install] Volcanoids is running; it loads the new build after a restart.")
     logger.info(f"[install] Installed {target}")
 
 
-def command_package(arguments: argparse.Namespace) -> None:
-    shipped_dir = assemble(arguments.mod)
-    version = load_manifest(arguments.mod)["Version"]
+def zip_shipped_folder(shipped_dir: Path, version: str) -> Path:
+    """Zip an assembled mod for players who install by hand, with the mod's folder at the top of the zip."""
     archive_path = DIST_DIR / f"{shipped_dir.name}-{version}.zip"
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(shipped_dir.rglob("*")):
             archive.write(path, path.relative_to(DIST_DIR))
     logger.info(f"[package] Wrote {archive_path.relative_to(REPO_ROOT)}")
+    return archive_path
+
+
+def command_package(arguments: argparse.Namespace) -> None:
+    zip_shipped_folder(assemble(arguments.mod), load_manifest(arguments.mod)["Version"])
 
 
 def command_enable(arguments: argparse.Namespace, enabled: bool) -> None:

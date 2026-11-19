@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Uploads a mod to the Volcanoids Steam Workshop through the running Steam client, making the same Steam calls the
+    game's own uploader (WorkshopUpload in Volcanoids.dll) makes. scripts/workshop.py builds and drives it.
+
+    Steamworks.NET's standalone package is managed code only. The native libsteam_api.so it calls comes from the
+    game's install (Volcanoids_Data/Plugins), which ships the matching Steamworks SDK (1.60); it is never copied here.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>WorkshopUploader</AssemblyName>
+    <RootNamespace>JalapenoLabs.WorkshopUploader</RootNamespace>
+    <!-- Built in the pinned .NET 9 SDK container, run on whatever newer runtime the host has. -->
+    <RollForward>Major</RollForward>
+    <OutputPath>bin</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 2024.8.0 targets Steamworks SDK 1.60, the version Volcanoids ships. -->
+    <PackageReference Include="Steamworks.NET" Version="2024.8.0" />
+  </ItemGroup>
+</Project>

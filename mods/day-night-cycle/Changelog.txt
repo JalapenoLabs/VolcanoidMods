@@ -1,3 +1,3 @@
 # Changelog
 
-2026.11.18 - Initial release. A 30-minute day and 20-minute night on the surface: golden-hour sunsets, a dark night with a starlit base light, 5,500 stars and the Milky Way turning overhead, and a moon that runs through all eight phases every eight days and lights the island by its phase. Client-side only: players with the mod share the same sky, players without it are unaffected.
+2026.11.19 - Initial release. A 30-minute day and 20-minute night on the surface: golden-hour sunsets, a dark night with a starlit base light, 5,500 stars and the Milky Way turning overhead, and a moon that runs through all eight phases every eight days and lights the island by its phase. Client-side only: players with the mod share the same sky, players without it are unaffected.

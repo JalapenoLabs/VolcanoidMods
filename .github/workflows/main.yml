@@ -51,3 +51,7 @@ jobs:
 
       - name: Run every mod's unit tests
         run: python3 scripts/mods.py test --all
+
+      # The Workshop uploader needs no game files, so unlike the mods it can be compiled here.
+      - name: Build the Workshop uploader
+        run: dotnet build tools/workshop-uploader/WorkshopUploader.csproj --configuration Release

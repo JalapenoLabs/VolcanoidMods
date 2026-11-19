@@ -7,7 +7,7 @@ build tooling, CI and docs are shared at the root so each mod stays small.
 
 | Mod | Description | Multiplayer | Steam |
 | --- | --- | --- | --- |
-| [day-night-cycle](mods/day-night-cycle) | A 30-minute day and 20-minute night: sunsets, stars, the Milky Way and a phasing moon | Client-side only | — |
+| [day-night-cycle](mods/day-night-cycle) | A 30-minute day and 20-minute night: sunsets, stars, the Milky Way and a phasing moon | Client-side only | [Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3842322377) |
 
 ## Prerequisites
 
@@ -42,16 +42,19 @@ Details, including in-game smoke tests: [docs/building.md](docs/building.md).
 ```
 VolcanoidMods/
 ├── mods/<mod>/
-│   ├── Content/              # shipped as-is: .manifest.json, .thumb.jpg, .workshop
+│   ├── Content/              # shipped as-is: .manifest.json, .thumb.jpg
 │   ├── Source/               # C# compiled into the mod's assembly
 │   ├── Tests/                # optional .NET unit tests for the mod's Unity-free code
 │   ├── mod.csproj
-│   ├── README.md, Changelog.txt, LICENSE
-│   └── Workshop.txt          # the Steam Workshop description, ready to paste
+│   ├── Workshop/             # the Steam Workshop page: description.txt, screenshots/, item-id
+│   └── README.md, Changelog.txt, LICENSE
 ├── build/VolcanoidsMod.props # shared MSBuild settings and game references
 ├── scripts/
 │   ├── mods.py               # list, validate, build, test, install, package, enable
+│   ├── workshop.py           # publish, inspect and subscribe to a mod's Workshop item
+│   ├── release.py            # Workshop update, signed tag and GitHub release in one go
 │   └── smoke_test.py         # boot the game, capture screenshots, restore saves (Linux)
+├── tools/workshop-uploader/  # the Steamworks uploader workshop.py runs
 ├── docs/                     # how the game loads mods, toolchain, publishing, per-mod design
 └── .github/workflows/main.yml
 ```
@@ -62,10 +65,14 @@ VolcanoidMods/
 every mod's unit tests. Volcanoids' assemblies cannot be redistributed, so CI does not compile the mods themselves;
 compile locally with `scripts/mods.py build --all` before pushing.
 
-## Publishing
+## Releasing
 
-Mods are uploaded with the game's own Workshop uploader from the in-game Mods menu. See
-[docs/publishing.md](docs/publishing.md).
+`scripts/release.py <mod>` updates the mod's Steam Workshop item, tags the commit, and publishes a GitHub release
+with the mod's zip. See [docs/publishing.md](docs/publishing.md).
+
+## Support
+
+If you enjoy these mods, you can [support Jalapeno Labs on Patreon](https://www.jalapenolabs.io/patreon).
 
 ## License
 

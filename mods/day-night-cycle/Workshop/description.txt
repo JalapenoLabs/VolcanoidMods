@@ -11,4 +11,9 @@ Friends who also run the mod see [b]the same sky at the same moment[/b], even if
 [*]The clock is real time: the sky keeps turning while the game is paused, and a save does not remember its time of day.
 [*]Whenever the game dims its sun (as eruption ash does), the moon and stars dim with it.
 [/list]
-Source code: https://github.com/JalapenoLabs/VolcanoidMods
+[h2]Links[/h2]
+[list]
+[*][url=https://github.com/JalapenoLabs/VolcanoidMods/tree/main/mods/day-night-cycle]Source code on GitHub[/url] (MIT license)
+[*][url=https://www.jalapenolabs.io/patreon]Support Jalapeno Labs on Patreon[/url]
+[/list]
+Made by [url=https://www.jalapenolabs.io]Jalapeno Labs[/url].

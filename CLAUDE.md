@@ -13,18 +13,21 @@ shared build settings, tooling, CI and docs. There are no submodules.
 | --- | --- |
 | How the game loads mods, manifests, multiplayer rules, launch arguments | `docs/modding.md` |
 | Toolchain, commands, unit tests, smoke tests | `docs/building.md` |
-| Workshop uploads | `docs/publishing.md` |
+| Releases: Workshop page, tags, GitHub releases | `docs/publishing.md` |
 | Decompiling the game and reading its bundles; the island's lighting as found | `docs/reverse-engineering.md` |
 | Day/Night Cycle's requirements and design | `docs/day-night-cycle.md` |
 
 ## Repository structure
 
 ```
-mods/<mod>/            Content/ (shipped verbatim), Source/, Tests/, mod.csproj, README.md, Changelog.txt,
-                       LICENSE, Workshop.txt
+mods/<mod>/            Content/ (shipped verbatim), Source/, Tests/, Workshop/ (description, screenshots,
+                       item-id), mod.csproj, README.md, Changelog.txt, LICENSE
 build/VolcanoidsMod.props   shared MSBuild: netstandard2.1, game references from VOLCANOIDS_DIR
 scripts/mods.py        list | validate | build | test | install | package | enable | disable
+scripts/workshop.py    publish | info | subscribe a mod's Workshop item (Linux, through the local Steam client)
+scripts/release.py     Workshop update + signed tag + GitHub release with the mod's zip
 scripts/smoke_test.py  boots the game with a mod's developer capture (Linux; Hyprland-aware)
+tools/workshop-uploader/  C# Steamworks.NET tool that workshop.py builds and runs
 docs/                  one document per area of decisions
 .github/workflows/     main.yml: validate + unit tests
 ```
@@ -33,7 +36,7 @@ docs/                  one document per area of decisions
 
 | Mod | Shipped folder | Multiplayer mode | Notes |
 | --- | --- | --- | --- |
-| `day-night-cycle` | `DayNightCycle` | ClientOnly (2) | 30 min day / 20 min night, hardcoded; synced by UTC + Steam time |
+| `day-night-cycle` | `DayNightCycle` | ClientOnly (2) | 30 min day / 20 min night, hardcoded; synced by UTC + Steam time. Workshop item in `Workshop/item-id` |
 
 ## Key conventions and constraints
 
@@ -46,8 +49,12 @@ docs/                  one document per area of decisions
 - **Manifest enums are integers** (`JsonUtility`). `MultiplayerMode`: 0 ClientServer, 1 ServerOnly, 2 ClientOnly,
   3 SinglePlayer. `UniqueModId` is `JalapenoLabs.<ModName>`; `Assemblies` names exactly `<AssemblyName>.dll`.
   `scripts/mods.py validate` enforces these.
-- **Versions are dates** (`2026.11.18`), in the manifest's `Version` and the matching `Changelog.txt` line.
-- **Commit `Content/.workshop`** after a mod's first Workshop upload, or the next upload creates a new item.
+- **Versions are dates** (`2026.11.19`), in the manifest's `Version` and the matching `Changelog.txt` line. Tags are
+  `<mod>-v<version>`, signed.
+- **Releases go through `scripts/release.py`**, never the in-game upload button: the button drops the description
+  and change note. Commit `Workshop/item-id` after a mod's first upload, or the next upload creates a new item.
+- **Every public page links Patreon** (`https://www.jalapenolabs.io/patreon`) and the GitHub source: the Workshop
+  description, the mod's README and the GitHub release notes.
 - **Keep testable logic Unity-free** (like `Source/Cycle/`), so `Tests/` can compile it as plain .NET in CI.
 - **Never fail silently**: every early return on unexpected state logs, with the `[ModName]` prefix.
 - **C# style**: K&R braces, 4 spaces, file-scoped namespaces, 120-column lines, `// Copyright © 2026 Jalapeno Labs`
@@ -67,7 +74,8 @@ docs/                  one document per area of decisions
 
 1. Create `mods/<mod-name>/` with `mod.csproj` (import `../../build/VolcanoidsMod.props`, set `AssemblyName` to
    `JalapenoLabs.<ModName>`), `Source/`, `Content/.manifest.json`, `Content/.thumb.jpg`, `README.md`,
-   `Changelog.txt`, `LICENSE` and `Workshop.txt`.
+   `Changelog.txt`, `LICENSE`, `Workshop/description.txt` and `Workshop/screenshots/`.
 2. Entry point: a `GameMod` subclass (`docs/modding.md`). Pick the narrowest multiplayer mode that works.
 3. `scripts/mods.py validate <mod>`, `build`, `install`, then smoke-test.
 4. Add the mod to the tables in this file and `README.md`, and a design doc in `docs/` if it makes decisions.
+5. Release it: `docs/publishing.md#the-first-release-of-a-mod`.

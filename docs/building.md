@@ -9,6 +9,8 @@ All tooling is one stdlib Python script, `scripts/mods.py`, plus `scripts/smoke_
   `mcr.microsoft.com/dotnet/sdk:9.0.300`, the same version CI pins.
 - Volcanoids installed. Mods compile against the game's own assemblies, read from the install; they are never
   copied into the repo, and the game loads its own copies at runtime.
+- For releases only: a .NET runtime (9 or newer) on the host to run the Workshop uploader, the Steam client signed
+  in, and the GitHub CLI (see [publishing.md](publishing.md)).
 - A `.env` copied from `.env.example`, pointing at the install and the game's data folder.
 
 ## Commands
@@ -48,6 +50,12 @@ scripts/smoke_test.py day-night-cycle --save Slot02 --shots "15,30.5,40@0.5"
 
 It boots the game straight from its install with `+load`, lets the mod's developer capture
 (`-daynight-capture`) photograph each moment, and reports the log lines and screenshots in `dist/smoke/<time>/`.
+
+- `--save-file PATH` loads a save from outside the game's Saves folder (copied in under the `--save` name, which must
+  be unused, and gone again when the folder is restored). Use it to shoot from a fixed spot: the player's own saves
+  move as they play, and may stand them underground or among hostile COGs.
+- `--game-args "..."` passes extra arguments to the game, such as `-daynight-at 40` to hold midnight from the
+  first frame.
 
 - On Hyprland the game opens on the hidden `special:agent` workspace, and its sound goes to a temporary PulseAudio
   null sink, so a run neither takes over the screen nor makes noise.

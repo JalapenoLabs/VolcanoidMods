@@ -190,6 +190,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("mod", help="mod folder under mods/, already installed and enabled")
     parser.add_argument("--save", required=True, help="save slot to load, e.g. Slot02")
+    parser.add_argument(
+        "--save-file",
+        type=Path,
+        help="load this .sav from elsewhere, copied in as --save for the run only (a new slot name)",
+    )
     parser.add_argument("--shots", required=True, help='minutes since sunrise, e.g. "15,30,40@0.5"')
     parser.add_argument("--timeout", type=float, default=300, help="seconds before the game is killed")
     parser.add_argument(
@@ -204,7 +209,13 @@ def main() -> None:
     settings = read_settings()
     game_dir = require_path(settings, "VOLCANOIDS_DIR")
     data_dir = require_path(settings, "VOLCANOIDS_DATA_DIR")
-    if not (data_dir / "Saves" / f"{parsed.save}.sav").is_file():
+    slot_path = data_dir / "Saves" / f"{parsed.save}.sav"
+    if parsed.save_file:
+        if not parsed.save_file.is_file():
+            raise SystemExit(f"--save-file {parsed.save_file} does not exist")
+        if slot_path.exists():
+            raise SystemExit(f"{parsed.save} is a real save; give --save-file a slot name that is not taken")
+    elif not slot_path.is_file():
         raise SystemExit(f"No save named {parsed.save} in {data_dir / 'Saves'}")
 
     run_dir = REPO_ROOT / "dist" / "smoke" / datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -212,6 +223,9 @@ def main() -> None:
     log_path = run_dir / "Player.log"
     run_dir.mkdir(parents=True)
     back_up(data_dir, run_dir / "backup")
+    if parsed.save_file:
+        # Copied in after the backup, so restoring the Saves folder afterwards removes it again.
+        shutil.copy2(parsed.save_file, slot_path)
 
     game_arguments = [
         # Steam starts the Linux build on OpenGL Core; match it so the test renders what players see.
