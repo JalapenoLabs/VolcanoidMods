@@ -39,10 +39,15 @@ recognised by its serialized field names. Loading `Common.bundle` takes a few mi
 
 ## The island's lighting, as found
 
+- **`RenderSettings.ambientProbe` does not round-trip.** The getter returns the stored probe multiplied by the
+  ambient intensity in linear space (the island's 0.66 reads back as 0.3931, so its stored 0.4719 reads as 0.1855);
+  the setter stores exactly what it is given. Read with `ambientIntensity` set to 1 before writing anything back,
+  or every write darkens the ambient light by that factor.
 - One realtime directional light, `Sun` (intensity 1.8, soft shadows, about 35 degrees up). The eruption timeline
   (`IslandTimeLight`) rewrites its intensity every `LateUpdate`.
-- No lightmaps. Ambient light is `Skybox` mode with realtime environment updates; 76 baked light probes, whose
-  coefficients are not readable from scripts; 132 reflection probes in "normal" and "after the blast" pairs.
+- No lightmaps. Ambient light is `Skybox` mode, an SH probe baked into the lighting data that the game leaves
+  constant; 76 baked light probes, whose coefficients are not readable from scripts; 132 reflection probes in
+  "normal" and "after the blast" pairs.
 - The sky is `Skybox/CubemapBlended` (`_Tex`, `_Tex2`, `_Blend`, `_Tint`, `_Exposure`, `_Rotation`), blended by
   `IslandTimeSkybox`. The ocean copies those properties into its own material in `WaterMaterialSkybox.Update`.
 - Fog comes from the game's own URP volume component, `UnityEngine.Rendering.Universal.Fog`; `FogRenderPass` copies

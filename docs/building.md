@@ -52,7 +52,11 @@ It boots the game straight from its install with `+load`, lets the mod's develop
 - On Hyprland the game opens on the hidden `special:agent` workspace, and its sound goes to a temporary PulseAudio
   null sink, so a run neither takes over the screen nor makes noise.
 - `Saves/`, `options.json`, `prefs`, `Player.log` and `Player-prev.log` are backed up first and put back after, so a
-  test autosave never replaces a real one.
+  test autosave never replaces a real one. They are put back only once the game has fully exited: Unity writes
+  `prefs` while shutting down, and a game still dying would overwrite the restored copy.
+- The save loads with its own multiplayer settings, so a co-op save opens its Steam lobby for the length of the run.
+- The run fails if the game's own ambient light moved: the scene report logs it at load and every capture logs it
+  between renders, and any change means the night leaked out of the camera renders into the game's state.
 - Capture mode turns vsync off: a hidden window gets almost no presents, and with vsync on the loading screen
   crawls (six minutes instead of twenty seconds).
 - The game's own `NullReferenceException`s from `AgentSpawner.OnDisable` and `StandaloneCrew` at quit are normal.

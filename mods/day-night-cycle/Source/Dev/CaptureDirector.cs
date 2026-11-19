@@ -236,10 +236,13 @@ internal sealed class CaptureDirector : MonoBehaviour {
 
     void LogCapture(string path) {
         NightFrame frame = controller.Frame;
+        // Read between renders, so this is the game's own ambient light; if realtime GI ever resampled the darkened
+        // sky, this baseline would drift down over a long night and the effect would compound.
+        UnityEngine.Rendering.SphericalHarmonicsL2 ambient = RenderSettings.ambientProbe;
         Debug.Log(
             $"{DayNightCycleMod.LogPrefix}Captured {Path.GetFileName(path)}: darkness {frame.Darkness:0.00}, "
             + $"{frame.Sample.MoonPhaseName}, moon height {frame.Sample.MoonHeight:0.00}, "
-            + $"clarity {frame.SkyClarity:0.00}"
+            + $"clarity {frame.SkyClarity:0.00}, baseline ambient {ambient[0, 0]:0.000}"
         );
     }
 

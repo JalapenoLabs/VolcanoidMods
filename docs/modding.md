@@ -55,8 +55,11 @@ Mods can also name static methods in `RuntimeInit` to run at a `RuntimeInitializ
 - When a client joins, `ModNetworkInfo.IsConfigurationCompatible` requires the host's required mods, and lets the
   client keep any extra mod whose mode is **ClientOnly**. A ClientOnly mod never blocks a join either way.
 - The host advertises only Workshop mods (ID not 0) in its lobby data.
-- **Saves record every active mod** (`Settings` copies `ModManager.Configuration`), and loading a save restarts the
-  game with that save's mods unless `-mods_resolved` is passed.
+- **Saves record every active mod**: every save and autosave calls `Settings.Save`, which copies
+  `ModManager.Configuration`.
+- Loading a save whose list differs from the active mods (`SavedGame.ApplyModsAndLoad`) opens `ModLoadDialogUi`,
+  listing both. **Continue** loads with the active mods; switching mods resolves the save's list and restarts the game
+  with it (`+load <Save> -mods_resolved`). Passing `-mods_resolved` yourself skips the dialog.
 - The save settings screen **disables multiplayer for any save that lists a local mod**. A ClientOnly mod tested
   from `LocalMods/` can join other players' games, but a save it was active in cannot be hosted until the mod is
   installed from the Workshop instead. Test hosting with an unlisted Workshop upload.

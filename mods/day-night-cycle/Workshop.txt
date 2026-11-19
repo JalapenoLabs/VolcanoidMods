@@ -6,8 +6,9 @@ At night the world goes dark, but nothing that makes its own light does. Lamps, 
 Friends who also run the mod see [b]the same sky at the same moment[/b], even if the host doesn't have it, because every copy reads the time of day from the same clock.
 [h2]Good to know[/h2]
 [list]
+[*]Loading a save made without the mod shows the game's mod-mismatch dialog: choose [b]Continue[/b] to play it with the night on.
 [*]Day and night lengths are fixed and unrelated to the eruption timer.
 [*]The clock is real time: the sky keeps turning while the game is paused, and a save does not remember its time of day.
-[*]Eruption ash hides the moon and stars, the way it dims the sun.
+[*]Whenever the game dims its sun (as eruption ash does), the moon and stars dim with it.
 [/list]
 Source code: https://github.com/JalapenoLabs/VolcanoidMods

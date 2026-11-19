@@ -21,10 +21,14 @@ it, because every copy reads the time of day from the same clock (UTC, checked a
 
 ## Things to know
 
+- **Loading a save made without the mod** brings up the game's mod-mismatch dialog. Choose **Continue** to load it
+  with the mod on; "switch mods" restarts the game with the save's own list, which turns the night off.
+- Saves remember which mods were on. A save played with the mod lists it, and loading it without the mod brings up
+  the same dialog, where Continue is again the way to keep playing.
 - Day and night lengths are fixed, and have nothing to do with the eruption timer.
 - The clock is real time: the sky keeps turning while the game is paused, and a save does not remember its time of
   day. Loading a game drops you wherever the shared clock is.
-- Eruption ash hides the moon and stars, the way it dims the sun.
+- Whenever the game dims its sun (as eruption ash does), the moon and stars dim with it.
 
 ## How it works
 

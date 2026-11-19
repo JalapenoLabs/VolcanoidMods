@@ -20,7 +20,7 @@ internal sealed class AmbientLight : ICameraEffect {
         if (darkness <= 0) {
             return;
         }
-        savedProbe = RenderSettings.ambientProbe;
+        savedProbe = ReadStoredProbe();
         savedReflectionIntensity = RenderSettings.reflectionIntensity;
         isApplied = true;
 
@@ -44,5 +44,20 @@ internal sealed class AmbientLight : ICameraEffect {
         RenderSettings.ambientProbe = savedProbe;
         RenderSettings.reflectionIntensity = savedReflectionIntensity;
         isApplied = false;
+    }
+
+    /// <summary>
+    /// The ambient probe as Unity stores it. The <c>RenderSettings.ambientProbe</c> getter returns the stored probe
+    /// already multiplied by the ambient intensity (in linear space: the island's 0.66 reads back as 0.39), while the
+    /// setter stores exactly what it is given. Writing back a value straight from the getter therefore darkens the
+    /// ambient light by that factor on every write, and within seconds of nightfall it reaches black and stays there.
+    /// Reading with the intensity at 1 returns the stored probe itself, so writes round-trip exactly.
+    /// </summary>
+    static SphericalHarmonicsL2 ReadStoredProbe() {
+        float intensity = RenderSettings.ambientIntensity;
+        RenderSettings.ambientIntensity = 1;
+        SphericalHarmonicsL2 stored = RenderSettings.ambientProbe;
+        RenderSettings.ambientIntensity = intensity;
+        return stored;
     }
 }

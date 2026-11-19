@@ -71,7 +71,7 @@ the cabin's own lamps light it. Crossing into a cave fades the night out over 1.
 | Effect | What it changes |
 | --- | --- |
 | `SunMoonLight` | The game's `Sun` light: dimmed and warmed at dusk, then turned into moonlight (blue, from the moon's direction, as bright as its phase and height allow) |
-| `AmbientLight` | `RenderSettings.ambientProbe` and the default reflection intensity |
+| `AmbientLight` | `RenderSettings.ambientProbe` (read as stored, see [reverse-engineering.md](reverse-engineering.md)) and the default reflection intensity |
 | `SkyMaterials` | The skybox's `_Exposure` and `_Tint`, and the ocean material that copies them (`WaterMaterialSkybox`) |
 | `ReflectionProbeDimmer` | The intensity of each reflection probe that can see the sky |
 | `NightVolume` | A global volume (priority 9, `MainZone` layer) with the game's `Fog` component and colour saturation |

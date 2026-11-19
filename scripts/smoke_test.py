@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -35,6 +36,8 @@ STEAM_APP_ID = "951440"
 SILENT_SINK = "volcanoid_mods_smoke_test"
 GAME_PROCESS_PATTERN = "[V]olcanoids.x86_64"
 LOG_PREFIX = "[DayNightCycle]"
+# The load-time scene report ("probe DC (0.186, ...") and every capture ("baseline ambient 0.186").
+BASELINE_PATTERN = re.compile(r"(?:probe DC \(|baseline ambient )(-?[0-9.]+)")
 
 # Everything the game might write during a session that belongs to the player. Unity rotates Player.log into
 # Player-prev.log at startup even when -logFile sends this run's log elsewhere, so both logs are kept too.
@@ -130,6 +133,23 @@ def wait_for_exit(timeout_seconds: float) -> bool:
     return True
 
 
+def stop_game() -> None:
+    """Stop the game and wait until it has fully exited.
+
+    Unity writes prefs while shutting down, so restoring the player's files before the process is gone lets the
+    dying game overwrite them.
+    """
+    for signal_name, grace_seconds in (("TERM", 30), ("KILL", 10)):
+        subprocess.run(["pkill", f"-{signal_name}", "-f", GAME_PROCESS_PATTERN])
+        deadline = time.monotonic() + grace_seconds
+        while is_game_running() and time.monotonic() < deadline:
+            time.sleep(1)
+        if not is_game_running():
+            return
+        logger.warning(f"[launch] The game outlived SIG{signal_name} for {grace_seconds}s")
+    logger.error("[launch] The game would not exit; if it writes on its way out, compare the files with the backup")
+
+
 def report(log_path: Path, capture_dir: Path) -> None:
     if not log_path.exists():
         logger.error(f"[report] No log at {log_path}; the game may not have started")
@@ -142,6 +162,27 @@ def report(log_path: Path, capture_dir: Path) -> None:
     print("\n".join(interesting[-120:]))
     shots = sorted(capture_dir.glob("*.png"))
     logger.info(f"[report] {len(shots)} screenshot(s) in {capture_dir}")
+    check_lighting_baseline(lines)
+
+
+def check_lighting_baseline(lines: list[str]) -> None:
+    """Fail loudly if the game's own ambient light changed during the run.
+
+    The night must only ever change lighting inside a camera's render. If the baseline the capture logs between
+    renders moves, the night has leaked into the game's state: the bug where a lossy ambient-probe round trip drove
+    the island's ambient light to black after the first night, and kept it there all day.
+    """
+    # The scene report's value comes first: it is read at load, before the night has run a single frame.
+    baselines = [float(match.group(1)) for line in lines if (match := BASELINE_PATTERN.search(line))]
+    if len(baselines) < 2:
+        logger.warning("[report] Too few ambient baselines were logged; the leak check did not run")
+        return
+    if max(baselines) - min(baselines) > 0.01 * max(baselines):
+        logger.error(
+            f"[report] LEAK: the game's ambient light moved from {baselines[0]} at load to {baselines[-1]}"
+        )
+        raise SystemExit(1)
+    logger.info(f"[report] The game's ambient light held at {baselines[0]} across {len(baselines)} captures")
 
 
 def main() -> None:
@@ -151,6 +192,11 @@ def main() -> None:
     parser.add_argument("--save", required=True, help="save slot to load, e.g. Slot02")
     parser.add_argument("--shots", required=True, help='minutes since sunrise, e.g. "15,30,40@0.5"')
     parser.add_argument("--timeout", type=float, default=300, help="seconds before the game is killed")
+    parser.add_argument(
+        "--game-args",
+        default="",
+        help='extra arguments for the game, e.g. "-daynight-at 15" to hold noon from the first frame',
+    )
     parsed = parser.parse_args()
 
     if is_game_running():
@@ -176,14 +222,14 @@ def main() -> None:
         "-logFile", str(log_path),
         "-daynight-capture", str(capture_dir),
         "-daynight-shots", parsed.shots,
+        *shlex.split(parsed.game_args),
     ]
     sink_module = open_silent_sink()
     try:
         launch(game_dir / "Volcanoids.x86_64", game_arguments, run_dir, is_silent=sink_module is not None)
         if not wait_for_exit(parsed.timeout):
-            logger.warning(f"[launch] Still running after {parsed.timeout:.0f}s; killing it")
-            subprocess.run(["pkill", "-f", GAME_PROCESS_PATTERN])
-            time.sleep(3)
+            logger.warning(f"[launch] Still running after {parsed.timeout:.0f}s; stopping it")
+            stop_game()
     finally:
         close_silent_sink(sink_module)
         restore(data_dir, run_dir / "backup")
