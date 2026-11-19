@@ -14,7 +14,7 @@ shared build settings, tooling, CI and docs. There are no submodules.
 | How the game loads mods, manifests, multiplayer rules, launch arguments | `docs/modding.md` |
 | Toolchain, commands, unit tests, smoke tests | `docs/building.md` |
 | Releases: Workshop page, tags, GitHub releases | `docs/publishing.md` |
-| Decompiling the game and reading its bundles; the island's lighting as found | `docs/reverse-engineering.md` |
+| Decompiling the game and reading its bundles; the island's lighting, scenery and drillships as found | `docs/reverse-engineering.md` |
 | Day/Night Cycle's requirements and design | `docs/day-night-cycle.md` |
 
 ## Repository structure

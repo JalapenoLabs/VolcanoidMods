@@ -135,8 +135,9 @@ internal static class ShowcaseDrillship {
     }
 
     /// <summary>
-    /// Builds a light into every empty light slot, choosing the Light variant whose prefab fits the slot, as the
-    /// building tool does. Slots already holding something (lights, Tesla mini turrets) are left alone.
+    /// Builds a light into every empty slot that takes one: the slots named by the Light item's variants, each filled
+    /// with the variant that fits it, as the building tool does. Slots already holding something (lights, Tesla mini
+    /// turrets) are left alone. Logs every slot name with what happened to its slots.
     /// </summary>
     static int FillLightSlots(Train train) {
         if (!RuntimeAssetDatabase.TryGetAsset(LightItemId, out Object asset) || !(asset is ItemDefinition lightItem)) {
@@ -146,22 +147,53 @@ internal static class ShowcaseDrillship {
             return 0;
         }
         Subpart[] lightVariants = lightItem.Prefabs.OfType<Subpart>().ToArray();
+        var lightSlotNames = new HashSet<string>(lightVariants.SelectMany(variant => variant.SlotNames));
 
-        int added = 0;
+        // Per slot name: how many slots there are, how many already held something, and how many got a light.
+        var tally = new SortedDictionary<string, (int Slots, int Filled, int Added)>();
+        var skipped = new List<string>();
         foreach (SubpartSlot slot in train.GetComponentsInChildren<SubpartSlot>(includeInactive: true)) {
-            if (slot.Subpart != null || !slot.SlotName.Contains("Light")) {
+            if (!lightSlotNames.Contains(slot.SlotName)) {
                 continue;
             }
-            Subpart variant = lightVariants.FirstOrDefault(
-                candidate => candidate.SlotNames.Contains(slot.SlotName) && slot.CanSwitchSubpart(candidate, out _)
-            );
+            tally.TryGetValue(slot.SlotName, out (int Slots, int Filled, int Added) counts);
+            counts.Slots++;
+            if (slot.Subpart != null) {
+                counts.Filled++;
+                tally[slot.SlotName] = counts;
+                continue;
+            }
+
+            Subpart variant = null;
+            string refusal = "no Light variant fits";
+            foreach (Subpart candidate in lightVariants.Where(each => each.SlotNames.Contains(slot.SlotName))) {
+                if (slot.CanSwitchSubpart(candidate, out string notificationId)) {
+                    variant = candidate;
+                    break;
+                }
+                refusal = notificationId ?? "refused";
+            }
             if (variant == null) {
-                continue;
+                skipped.Add($"{slot.SlotName} ({refusal})");
+            } else {
+                slot.SetSubpart(variant);
+                counts.Added++;
             }
-            slot.SetSubpart(variant);
-            added++;
+            tally[slot.SlotName] = counts;
         }
-        return added;
+
+        var report = new System.Text.StringBuilder($"{DayNightCycleMod.LogPrefix}Showcase light slots:");
+        foreach (KeyValuePair<string, (int Slots, int Filled, int Added)> entry in tally) {
+            report.Append(
+                $"\n  {entry.Key}: {entry.Value.Slots} slots, {entry.Value.Filled} already filled, "
+                + $"{entry.Value.Added} lights added"
+            );
+        }
+        if (skipped.Count > 0) {
+            report.Append($"\n  Skipped: {string.Join(", ", skipped)}");
+        }
+        Debug.Log(report.ToString());
+        return tally.Values.Sum(counts => counts.Added);
     }
 
     /// <summary>How far deployed modules reach out from the drillship's track.</summary>

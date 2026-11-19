@@ -64,6 +64,10 @@ internal sealed class ShowcaseCamera {
     readonly float radius;
     readonly float aspect;
     readonly Vector3[] hullTargets;
+    /// <summary>
+    /// The corners of the drillship's bounds. The frame is convex, so when every corner is in frame, the whole hull
+    /// inside the bounds is too.
+    /// </summary>
     readonly Vector3[] hullCorners;
     readonly List<TerrainTrees.Tree> trees;
 
@@ -95,7 +99,7 @@ internal sealed class ShowcaseCamera {
             "moon view",
             Candidates(awayFromMoon, MoonHeadingOffsets, MoonDistances),
             position => AimUnderMoon(position, moon),
-            pose => ShowsWholeHull(pose)
+            pose => hullCorners.All(corner => IsInFrame(pose, corner - pose.position, HullFrameMargin))
                 && IsInFrame(pose, moon, MoonFrameMargin)
                 && !IsBlocked(pose.position, pose.position + moon * TreeReach)
         );
@@ -112,7 +116,7 @@ internal sealed class ShowcaseCamera {
             "side view",
             Candidates(threeQuarter, SideHeadingOffsets, SideDistances),
             position => new Pose(position, Quaternion.LookRotation(bounds.center - position)),
-            ShowsWholeHull
+            pose => hullCorners.All(corner => IsInFrame(pose, corner - pose.position, HullFrameMargin))
         );
     }
 
@@ -212,14 +216,6 @@ internal sealed class ShowcaseCamera {
         Vector3 heading = Vector3.ProjectOnPlane(bounds.center - position, Vector3.up).normalized;
         Vector3 forward = heading * Mathf.Cos(pitch * Mathf.Deg2Rad) + Vector3.up * Mathf.Sin(pitch * Mathf.Deg2Rad);
         return new Pose(position, Quaternion.LookRotation(forward));
-    }
-
-    /// <summary>
-    /// Whether every corner of the drillship's bounds is in frame. The frame is convex, so the hull inside the bounds
-    /// is then wholly in frame too.
-    /// </summary>
-    bool ShowsWholeHull(Pose pose) {
-        return hullCorners.All(corner => IsInFrame(pose, corner - pose.position, HullFrameMargin));
     }
 
     /// <summary>Whether a direction from the camera lands inside <paramref name="margin"/> of the frame.</summary>
