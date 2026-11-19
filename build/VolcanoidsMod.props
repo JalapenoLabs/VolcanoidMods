@@ -1,0 +1,40 @@
+<Project>
+  <!--
+    Shared settings for every Volcanoids mod assembly. Each mods/<mod>/mod.csproj imports this file.
+
+    Mods compile against the game's own assemblies, read straight from the local install. They are
+    never copied into the repo or into a mod: the game already has them loaded when a mod starts.
+    Point VOLCANOIDS_DIR at the install (scripts/mods.py passes it from .env).
+
+    This is an explicit import rather than a Directory.Build.props, so the pure .NET unit-test
+    projects under mods/<mod>/Tests do not inherit the game references.
+  -->
+  <PropertyGroup>
+    <!-- The game runs Unity 6 Mono, which loads .NET Standard 2.1 assemblies. -->
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+
+    <!-- Compile against the BCL the game ships (its mscorlib and netstandard facades), not the SDK's. -->
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+
+    <VolcanoidsManagedDir>$(VOLCANOIDS_DIR)/Volcanoids_Data/Managed</VolcanoidsManagedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(VolcanoidsManagedDir)/*.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="RequireVolcanoidsInstall" BeforeTargets="ResolveAssemblyReferences">
+    <Error
+      Condition="!Exists('$(VolcanoidsManagedDir)/Volcanoids.dll')"
+      Text="Volcanoids assemblies not found in '$(VolcanoidsManagedDir)'. Set VOLCANOIDS_DIR (see .env.example)." />
+  </Target>
+</Project>

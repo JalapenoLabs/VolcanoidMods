@@ -1,0 +1,13 @@
+The island finally sleeps. Day/Night Cycle gives Volcanoids a [b]30-minute day and a 20-minute night[/b].
+The sun sinks into a golden-hour sunset, the sky darkens, and the stars come out: thousands of them, with the Milky Way arching overhead and the brightest stars twinkling as the sky slowly turns. A moon rises and crosses the night, lit by the sun below the horizon, and runs through all eight phases in their real order every eight days. Full-moon nights are bright enough to see by; new-moon nights are pitch black apart from starlight.
+At night the world goes dark, but nothing that makes its own light does. Lamps, your flashlight, lava, and the glow of COGs and drillships stay as bright as ever, so they become what you navigate by. Caves keep their own lighting.
+[h2]Multiplayer[/h2]
+[b]Client-side only.[/b] Install it whether you host, join or play alone. It only changes what you see: nothing is sent over the network, it never blocks joining a game, and friends without it are unaffected.
+Friends who also run the mod see [b]the same sky at the same moment[/b], even if the host doesn't have it, because every copy reads the time of day from the same clock.
+[h2]Good to know[/h2]
+[list]
+[*]Day and night lengths are fixed and unrelated to the eruption timer.
+[*]The clock is real time: the sky keeps turning while the game is paused, and a save does not remember its time of day.
+[*]Eruption ash hides the moon and stars, the way it dims the sun.
+[/list]
+Source code: https://github.com/JalapenoLabs/VolcanoidMods

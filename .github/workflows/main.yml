@@ -1,0 +1,53 @@
+# CI for the Volcanoids mods monorepo.
+#
+# Volcanoids' assemblies cannot be redistributed, so CI cannot compile the mods themselves. It checks what can be
+# checked without the game: every mod's files and manifest, and every mod's unit tests (which compile only the
+# Unity-free parts of the mod). Compiling against the game happens locally: scripts/mods.py build --all.
+
+name: Volcanoids Mods CI
+
+env:
+  FORCE_COLOR: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate mods
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12.8'
+
+      - name: Check required files and manifests
+        run: python3 scripts/mods.py validate --all
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12.8'
+
+      # Pinned to match the SDK container scripts/mods.py uses locally.
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: '9.0.300'
+
+      - name: Run every mod's unit tests
+        run: python3 scripts/mods.py test --all

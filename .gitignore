@@ -1,0 +1,28 @@
+# ── Build output ─────────────────────────────────────────────────────────────
+**/bin/
+**/obj/
+dist/
+
+# ── Game files: never commit the game's assemblies or decompiled source ─────
+Managed/
+decompiled/
+
+# ── Local environment ────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+
+# ── Editors and OS ───────────────────────────────────────────────────────────
+.vs/
+.idea/
+*.user
+*.sln
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log

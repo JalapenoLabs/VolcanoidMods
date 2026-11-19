@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Target framework, game references and build flags shared by every mod. -->
+  <Import Project="../../build/VolcanoidsMod.props" />
+
+  <PropertyGroup>
+    <RootNamespace>JalapenoLabs.DayNightCycle</RootNamespace>
+    <AssemblyName>JalapenoLabs.DayNightCycle</AssemblyName>
+    <OutputPath>bin</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Source/**/*.cs" />
+  </ItemGroup>
+</Project>
