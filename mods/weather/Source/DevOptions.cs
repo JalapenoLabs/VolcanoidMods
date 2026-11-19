@@ -19,9 +19,12 @@ namespace JalapenoLabs.Weather;
 ///   -weather-speed 10           run the weather 10 times faster (with -weather-at, starting from that moment)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
-///   -weather-views LIST         which views to capture (island, sky, drillship, player); default all
+///   -weather-views LIST         which views to capture (island, sky, drillship, hull, player); default all
 ///   -weather-dump-sounds DIR    write every synthesised sound as a WAV file into DIR
 ///   -weather-survey             log the game's particle materials, water and lava, for building the storm's effects
+///   -weather-showcase FILE      with a capture, spawn this drillship design fully built and lit, and centre the views
+///                               on it (the drillship view frames it with clear sightlines)
+///   -weather-showcase-site NAME the surface landing site to spawn it at (default: the most open free one)
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>A moment within a storm of one kind.</summary>
@@ -49,7 +52,7 @@ internal sealed class DevOptions {
         [StormKind.Thunderstorm] = "thunder",
     };
 
-    static readonly string[] AllViews = { "island", "sky", "drillship", "player" };
+    static readonly string[] AllViews = { "island", "sky", "drillship", "hull", "player" };
 
     public readonly Moment? Hold;
     public readonly double Speed;
@@ -58,6 +61,10 @@ internal sealed class DevOptions {
     public readonly IReadOnlyList<string> Views;
     public readonly string SoundDumpDirectory;
     public readonly bool IsSurveying;
+    /// <summary>A drillship design file to spawn and photograph during a capture, or null.</summary>
+    public readonly string ShowcaseDesign;
+    /// <summary>The landing site to spawn the showcase drillship at, or null for the most open free one.</summary>
+    public readonly string ShowcaseSite;
 
     DevOptions(
         Moment? hold,
@@ -66,7 +73,9 @@ internal sealed class DevOptions {
         List<Moment> shots,
         List<string> views,
         string soundDumpDirectory,
-        bool isSurveying
+        bool isSurveying,
+        string showcaseDesign,
+        string showcaseSite
     ) {
         Hold = hold;
         Speed = speed;
@@ -75,6 +84,8 @@ internal sealed class DevOptions {
         Views = views;
         SoundDumpDirectory = soundDumpDirectory;
         IsSurveying = isSurveying;
+        ShowcaseDesign = showcaseDesign;
+        ShowcaseSite = showcaseSite;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
@@ -120,7 +131,9 @@ internal sealed class DevOptions {
             shots: shots,
             views: views,
             soundDumpDirectory: ReadValue(arguments, "-weather-dump-sounds"),
-            isSurveying: Array.IndexOf(arguments, "-weather-survey") >= 0
+            isSurveying: Array.IndexOf(arguments, "-weather-survey") >= 0,
+            showcaseDesign: ReadValue(arguments, "-weather-showcase"),
+            showcaseSite: ReadValue(arguments, "-weather-showcase-site")
         );
     }
 
@@ -133,6 +146,7 @@ internal sealed class DevOptions {
             : "not held";
         string capture = IsCapturing
             ? $", capturing {Shots.Count} moments ({string.Join(", ", Views)}) into {CaptureDirectory}"
+                + (ShowcaseDesign != null ? $" around a showcase drillship from {ShowcaseDesign}" : "")
             : "";
         string sounds = SoundDumpDirectory != null
             ? $", writing its sounds to {SoundDumpDirectory}"

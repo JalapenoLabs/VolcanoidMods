@@ -43,6 +43,11 @@ internal sealed class WeatherController : MonoBehaviour {
     CloudDeck clouds;
     RainFall rain;
     LightningStrikes lightning;
+    Puddles puddles;
+    LensRain lensRain;
+    WetSurfaces wetSurfaces;
+    StormSea sea;
+    LavaSteam steam;
     bool hasStartedVisuals;
     Phase? lastPhase;
 
@@ -81,6 +86,7 @@ internal sealed class WeatherController : MonoBehaviour {
         ambience = Start(() => new StormAmbience());
         volume = Own(Start(() => new StormVolume(scene)));
         audio = Own(Start(() => new WeatherAudio(transform, devOptions.SoundDumpDirectory)));
+        sea = Own(Start(() => new StormSea()));
         textures = Own(Start(() => new StormTextures()));
 
         if (devOptions.IsSurveying) {
@@ -122,6 +128,11 @@ internal sealed class WeatherController : MonoBehaviour {
         clouds = Own(Start(() => new CloudDeck(transform, textures)));
         rain = Own(Start(() => new RainFall(transform, textures)));
         lightning = Own(Start(() => new LightningStrikes(transform, textures)));
+        List<LavaPool> lavaPools = LavaPools.FindOnSurface();
+        puddles = Own(Start(() => new Puddles(transform, textures, lavaPools)));
+        lensRain = Own(Start(() => new LensRain(transform, textures)));
+        wetSurfaces = Own(Start(() => new WetSurfaces(transform, textures)));
+        steam = Own(Start(() => new LavaSteam(gameObject.scene, textures, lavaPools)));
         hasStartedVisuals = true;
     }
 
@@ -142,7 +153,13 @@ internal sealed class WeatherController : MonoBehaviour {
             clouds?.Update(in weather, now, eye, surface);
             rain?.Update(weather.Rain, wind, eye, surface);
             lightning?.Update(in weather, now, viewCamera, location, audio);
+            puddles?.Update(weather.Wetness, weather.Rain, eye, surface, Time.deltaTime);
+            lensRain?.Update(weather.Rain * surface, location.Outdoors, viewCamera, Time.unscaledDeltaTime);
+            wetSurfaces?.Update(weather.Wetness, weather.Rain * surface, eye, Time.deltaTime);
+            steam?.Update(weather.Rain, wind, eye, surface);
         }
+        // The sea answers the storm's wind, not the player's whereabouts: it is the same sea underground or not.
+        sea?.Update(weather.Cover * Mathf.Clamp01(weather.WindSpeed / 9), weather.WindHeading);
         LogPhaseChange();
     }
 
@@ -196,8 +213,10 @@ internal sealed class WeatherController : MonoBehaviour {
     /// </summary>
     public void LogBaseline(string when) {
         float baseline = RenderSettings.ambientProbe[0, 0];
+        string puddleReport = puddles != null ? $", {puddles.Describe()}" : "";
         Debug.Log($"{WeatherMod.LogPrefix}Storm {when}: {weather.Storm.Kind}, cover {weather.Cover:0.00}, "
-            + $"rain {weather.Rain:0.00}, wetness {weather.Wetness:0.00}, baseline ambient {baseline:0.000}");
+            + $"rain {weather.Rain:0.00}, wetness {weather.Wetness:0.00}{puddleReport}, "
+            + $"baseline ambient {baseline:0.000}");
     }
 
     void LogPhaseChange() {

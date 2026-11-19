@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace JalapenoLabs.DayNightCycle.Dev;
+namespace JalapenoLabs.Shared.Showcase;
 
 /// <summary>
 /// Developer captures only: works out where to stand to photograph the showcase drillship
@@ -81,11 +81,11 @@ internal sealed class ShowcaseCamera {
         Vector3[] allTargets = HullTargets(bounds);
         hullTargets = allTargets.Where(IsExposed).ToArray();
         Debug.Log(
-            $"{DayNightCycleMod.LogPrefix}Showcase framing steers around {trees.Count} tree(s) within "
+            $"{ModIdentity.LogPrefix}Showcase framing steers around {trees.Count} tree(s) within "
             + $"{TreeReach:0} m, sighting {hullTargets.Length} of {allTargets.Length} points on the hull"
         );
         if (hullTargets.Length == 0) {
-            Debug.LogWarning($"{DayNightCycleMod.LogPrefix}Every hull point is buried; framing cannot check views");
+            Debug.LogWarning($"{ModIdentity.LogPrefix}Every hull point is buried; framing cannot check views");
         }
     }
 
@@ -146,11 +146,11 @@ internal sealed class ShowcaseCamera {
 
         if (fewestProblems > 0) {
             Debug.LogWarning(
-                $"{DayNightCycleMod.LogPrefix}Showcase {viewName}: no fully clear view; using {bestDescription} "
+                $"{ModIdentity.LogPrefix}Showcase {viewName}: no fully clear view; using {bestDescription} "
                 + $"with {fewestProblems} problem(s) (blocked sightlines, or the hull or moon out of frame)"
             );
         } else {
-            Debug.Log($"{DayNightCycleMod.LogPrefix}Showcase {viewName}: clear from {bestDescription}");
+            Debug.Log($"{ModIdentity.LogPrefix}Showcase {viewName}: clear from {bestDescription}");
         }
         return best;
     }

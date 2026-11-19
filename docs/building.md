@@ -38,6 +38,11 @@ reference to every assembly in `Volcanoids_Data/Managed`, including the game's o
 (implicit framework references are off). A mod's `mod.csproj` imports it, names its assembly, and compiles
 `Source/**/*.cs` into `bin/`.
 
+Code more than one mod uses (today the developer capture tooling: the showcase drillship, its framing and the terrain
+tree reader) lives in `shared/`, and each mod's `mod.csproj` compiles it too. Every mod therefore carries its own copy
+in its own assembly, so no mod depends on another being installed. Each mod's `Source/ModIdentity.cs` tells its copy
+which log prefix to use.
+
 A mod ships as its `Content/` folder plus the compiled assembly, laid out in `dist/<Folder>/`.
 
 ## Unit tests

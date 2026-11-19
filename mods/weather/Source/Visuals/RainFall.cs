@@ -19,6 +19,9 @@ namespace JalapenoLabs.Weather.Visuals;
 internal sealed class RainFall : IDisposable {
     const float FallSpeed = 11;
 
+    /// <summary>The share of drop impacts that throw up a wisp of spray.</summary>
+    const float SprayChance = 0.07f;
+
     /// <summary>How much of the wind's speed the drops take on.</summary>
     const float WindDrag = 0.55f;
 
@@ -38,6 +41,8 @@ internal sealed class RainFall : IDisposable {
     readonly ParticleSystem splashes;
     readonly Material dropMaterial;
     readonly Material splashMaterial;
+    readonly ParticleSystem spray;
+    readonly Material sprayMaterial;
 
     public RainFall(Transform parent, StormTextures textures) {
         dropMaterial = GameMaterials.CloneLitSmoke("rain");
@@ -51,7 +56,10 @@ internal sealed class RainFall : IDisposable {
         dropMaterial.SetColor(GameMaterials.BaseColorId, new Color(1.25f, 1.3f, 1.4f, 0.22f));
         splashMaterial = new Material(dropMaterial) { name = "Weather.Splash" };
         splashMaterial.SetTexture(GameMaterials.BaseMapId, textures.Splash);
-        splashMaterial.SetColor(GameMaterials.BaseColorId, new Color(1.3f, 1.35f, 1.45f, 0.45f));
+        splashMaterial.SetColor(GameMaterials.BaseColorId, new Color(1.5f, 1.55f, 1.65f, 0.65f));
+        sprayMaterial = new Material(dropMaterial) { name = "Weather.Spray" };
+        sprayMaterial.SetTexture(GameMaterials.BaseMapId, textures.CloudAlbedo);
+        sprayMaterial.SetColor(GameMaterials.BaseColorId, new Color(1.25f, 1.3f, 1.38f, 0.2f));
 
         host = new GameObject("Weather.Rain") { layer = Layers.MainZone };
         host.transform.SetParent(parent, false);
@@ -66,12 +74,24 @@ internal sealed class RainFall : IDisposable {
         splashes = splashObject.AddComponent<ParticleSystem>();
         splashes.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         ConfigureSplashes();
+        var sprayObject = new GameObject("Spray") { layer = Layers.MainZone };
+        sprayObject.transform.SetParent(nearDrops.transform, false);
+        spray = sprayObject.AddComponent<ParticleSystem>();
+        spray.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        ConfigureSpray();
         ParticleSystem.SubEmittersModule subEmitters = nearDrops.subEmitters;
         subEmitters.enabled = true;
         subEmitters.AddSubEmitter(
             splashes,
             ParticleSystemSubEmitterType.Collision,
             ParticleSystemSubEmitterProperties.InheritNothing
+        );
+        // Now and then a drop's impact leaves a wisp of spray: in a downpour, every surface it hits smokes with it.
+        subEmitters.AddSubEmitter(
+            spray,
+            ParticleSystemSubEmitterType.Collision,
+            ParticleSystemSubEmitterProperties.InheritNothing,
+            SprayChance
         );
         nearDrops.Play();
         farDrops.Play();
@@ -139,6 +159,9 @@ internal sealed class RainFall : IDisposable {
         collision.dampen = 1;
         collision.radiusScale = 0.2f;
         collision.enableDynamicColliders = true;
+        // Medium quality only weighs this many nearby collision shapes, terrain first; a fully built drillship alone
+        // has hundreds, and past the limit the rain would fall straight through its hull.
+        collision.maxCollisionShapes = 2048;
     }
 
     void ConfigureSplashes() {
@@ -147,9 +170,9 @@ internal sealed class RainFall : IDisposable {
         main.maxParticles = 6000;
         main.playOnAwake = false;
         main.loop = false;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.14f, 0.24f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.16f, 0.28f);
         main.startSpeed = 0;
-        main.startSize = new ParticleSystem.MinMaxCurve(0.16f, 0.4f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.55f);
         main.startColor = new Color(0.5f, 0.5f, 0.5f, 1);
 
         ParticleSystem.EmissionModule emission = splashes.emission;
@@ -176,6 +199,45 @@ internal sealed class RainFall : IDisposable {
         renderer.sharedMaterial = splashMaterial;
         // Upright, turned to face the camera, as a crown of spray stands up from where the drop landed.
         renderer.renderMode = ParticleSystemRenderMode.VerticalBillboard;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        GameMaterials.UseLitSmokeStreams(renderer);
+    }
+
+    /// <summary>Soft, low wisps of spray that rise a little where the rain beats down, and drift.</summary>
+    void ConfigureSpray() {
+        ParticleSystem.MainModule main = spray.main;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = 1500;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, 0.8f);
+        main.startSize = new ParticleSystem.MinMaxCurve(1.2f, 2.6f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0, Mathf.PI * 2);
+        main.startColor = new Color(0.5f, 0.5f, 0.5f, 1);
+        ParticleSystem.EmissionModule emission = spray.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 0;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0, 1) });
+        ParticleSystem.ShapeModule shape = spray.shape;
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.Hemisphere;
+        shape.radius = 0.3f;
+        ParticleSystem.ColorOverLifetimeModule color = spray.colorOverLifetime;
+        color.enabled = true;
+        var fade = new Gradient();
+        fade.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0), new GradientColorKey(Color.white, 1) },
+            new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(1, 0.25f), new GradientAlphaKey(0, 1) }
+        );
+        color.color = fade;
+        ParticleSystem.SizeOverLifetimeModule size = spray.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1, AnimationCurve.Linear(0, 0.6f, 1, 1.4f));
+        var renderer = spray.GetComponent<ParticleSystemRenderer>();
+        renderer.sharedMaterial = sprayMaterial;
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         GameMaterials.UseLitSmokeStreams(renderer);
@@ -213,6 +275,6 @@ internal sealed class RainFall : IDisposable {
     }
 
     public void Dispose() {
-        GameMaterials.Destroy(host, dropMaterial, splashMaterial);
+        GameMaterials.Destroy(host, dropMaterial, splashMaterial, sprayMaterial);
     }
 }

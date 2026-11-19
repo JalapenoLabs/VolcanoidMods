@@ -10,5 +10,7 @@
 
   <ItemGroup>
     <Compile Include="Source/**/*.cs" />
+    <!-- Code shared between the mods (developer capture tooling); each mod compiles its own copy. -->
+    <Compile Include="../../shared/**/*.cs" />
   </ItemGroup>
 </Project>

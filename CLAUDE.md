@@ -23,6 +23,7 @@ shared build settings, tooling, CI and docs. There are no submodules.
 mods/<mod>/            Content/ (shipped verbatim), Source/, Tests/, Workshop/ (description, screenshots,
                        item-id), mod.csproj, README.md, Changelog.txt, LICENSE
 build/VolcanoidsMod.props   shared MSBuild: netstandard2.1, game references from VOLCANOIDS_DIR
+shared/                code several mods compile into their own assemblies (developer capture tooling)
 scripts/mods.py        list | validate | build | test | install | package | enable | disable
 scripts/workshop.py    publish | info | subscribe a mod's Workshop item (Linux, through the local Steam client)
 scripts/release.py     Workshop update + signed tag + GitHub release with the mod's zip
@@ -76,8 +77,9 @@ docs/                  one document per area of decisions
 ## Adding a new mod
 
 1. Create `mods/<mod-name>/` with `mod.csproj` (import `../../build/VolcanoidsMod.props`, set `AssemblyName` to
-   `JalapenoLabs.<ModName>`), `Source/`, `Content/.manifest.json`, `Content/.thumb.jpg`, `README.md`,
-   `Changelog.txt`, `LICENSE`, `Workshop/description.txt` and `Workshop/screenshots/`.
+   `JalapenoLabs.<ModName>`, compile `../../shared/**/*.cs` too), `Source/` (with a `ModIdentity.cs`),
+   `Content/.manifest.json`, `Content/.thumb.jpg`, `README.md`, `Changelog.txt`, `LICENSE`,
+   `Workshop/description.txt` and `Workshop/screenshots/`.
 2. Entry point: a `GameMod` subclass (`docs/modding.md`). Pick the narrowest multiplayer mode that works.
 3. `scripts/mods.py validate <mod>`, `build`, `install`, then smoke-test.
 4. Add the mod to the tables in this file and `README.md`, and a design doc in `docs/` if it makes decisions.

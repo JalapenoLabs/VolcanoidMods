@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using JalapenoLabs.Shared.Showcase;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -14,9 +15,12 @@ namespace JalapenoLabs.Weather.Dev;
 ///
 /// For each moment it holds the weather clock there and photographs each requested view: the island from above
 /// looking towards the volcano, the same spot looking up into the clouds, a drillship close up, and the player's own
-/// view. A view other than the player's lifts the player's own camera for the length of the frame's rendering
-/// (applied before the first camera renders, undone after the last), so the game never sees it move, and anything
-/// else that follows the camera while rendering (Day/Night Cycle's sky dome) sees where it really renders from. The
+/// view. With -weather-showcase it first spawns a fully built drillship at an open landing site (the shared
+/// <see cref="ShowcaseDrillship"/>), centres the views on it, and frames it with clear sightlines past rocks and trees
+/// (<see cref="ShowcaseCamera"/>). A view other than the player's lifts the player's own camera for the length of
+/// the frame's rendering (applied before the first camera renders, undone after the last), so the game never sees it
+/// move, and anything else that follows the camera while rendering (Day/Night Cycle's sky dome) sees where it really
+/// renders from. The
 /// game's camera shake sets the view matrix from the player's head in Camera.onPreRender, so the lift sets it again
 /// after that. The HUD and FPS counter are hidden.
 /// </summary>
@@ -42,9 +46,17 @@ internal sealed class CaptureDirector : MonoBehaviour {
     /// </summary>
     const float ViewSettleSeconds = 4;
 
+    /// <summary>How long a freshly spawned showcase drillship gets for its modules and lights to deploy.</summary>
+    const float ShowcaseSettleSeconds = 8;
+
     const float IslandViewHeight = 70;
     const float IslandViewFieldOfView = 62;
     const float DrillshipViewFieldOfView = 50;
+    const float HullViewFieldOfView = 58;
+
+    /// <summary>How far from the hull the close-up stands, and how high above the ground.</summary>
+    const float HullViewDistance = 16;
+    const float HullViewHeight = 2.2f;
 
     WeatherController controller;
     DevOptions devOptions;
@@ -93,7 +105,16 @@ internal sealed class CaptureDirector : MonoBehaviour {
         Options.Instance.ShowHUD = false;
         Options.Instance.ShowFps = false;
 
-        List<View> views = BuildViews(screenCamera.transform.position);
+        Train showcase = null;
+        if (devOptions.ShowcaseDesign != null) {
+            showcase = ShowcaseDrillship.Spawn(
+                devOptions.ShowcaseDesign,
+                devOptions.ShowcaseSite,
+                screenCamera.transform.position
+            );
+            yield return new WaitForSecondsRealtime(ShowcaseSettleSeconds);
+        }
+        List<View> views = BuildViews(screenCamera.transform.position, showcase);
         for (int shotIndex = 0; shotIndex < devOptions.Shots.Count; shotIndex++) {
             DevOptions.Moment shot = devOptions.Shots[shotIndex];
             controller.Clock.Hold(SyncedClock.FindMoment(controller.Clock.Now, shot));
@@ -128,18 +149,31 @@ internal sealed class CaptureDirector : MonoBehaviour {
         Application.Quit();
     }
 
-    List<View> BuildViews(Vector3 playerPosition) {
+    List<View> BuildViews(Vector3 playerPosition, Train showcase) {
         var views = new List<View>();
+        Vector3 focus = playerPosition;
+        ShowcaseCamera framing = null;
+        if (showcase != null) {
+            Bounds bounds = ShowcaseDrillship.MeasureBounds(showcase);
+            framing = new ShowcaseCamera(showcase, bounds, screenCamera.aspect);
+            focus = bounds.center;
+        }
         foreach (string name in devOptions.Views) {
             switch (name) {
                 case "island":
-                    views.Add(new View(name, () => LookTowardsVolcano(playerPosition), IslandViewFieldOfView));
+                    views.Add(new View(name, () => LookTowardsVolcano(focus), IslandViewFieldOfView));
                     break;
                 case "sky":
-                    views.Add(new View(name, () => LookUpAtClouds(playerPosition), IslandViewFieldOfView));
+                    views.Add(new View(name, () => LookUpAtClouds(focus), IslandViewFieldOfView));
+                    break;
+                case "drillship" when framing != null:
+                    views.Add(new View(name, () => framing.FrameAlongSide(), ShowcaseCamera.FieldOfView));
                     break;
                 case "drillship":
                     views.Add(new View(name, () => FrameNearestDrillship(playerPosition), DrillshipViewFieldOfView));
+                    break;
+                case "hull":
+                    views.Add(new View(name, () => CloseToHull(showcase, playerPosition), HullViewFieldOfView));
                     break;
                 default:
                     views.Add(new View(name, () => null, null));
@@ -191,8 +225,55 @@ internal sealed class CaptureDirector : MonoBehaviour {
         return highest;
     }
 
-    /// <summary>A three-quarter view of the drillship nearest the player, from a little above it.</summary>
-    static Pose? FrameNearestDrillship(Vector3 playerPosition) {
+    /// <summary>
+    /// Standing on the ground close to a drillship (the showcase, or the one nearest the player), on its most open
+    /// side, looking at its hull: where rain splashes off it, water pours from its edges and puddles gather around it.
+    /// </summary>
+    static Pose? CloseToHull(Train showcase, Vector3 playerPosition) {
+        Component drillship = showcase != null ? showcase : NearestDrillship(playerPosition);
+        if (drillship == null) {
+            Debug.LogWarning($"{WeatherMod.LogPrefix}No drillship for the hull view; using the player's view");
+            return null;
+        }
+        Bounds bounds = RendererBounds(drillship.gameObject);
+        Pose? best = null;
+        float bestOpenness = -1;
+        for (int direction = 0; direction < 8; direction++) {
+            float angle = direction * 45 * Mathf.Deg2Rad;
+            var outward = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle));
+            // From the bounds' edge in that direction, out to the standing spot.
+            Vector3 edge = bounds.ClosestPoint(bounds.center + outward * bounds.extents.magnitude * 2);
+            Vector3 spot = edge + outward * HullViewDistance;
+            bool hasGround = Physics.Raycast(
+                spot + Vector3.up * 200,
+                Vector3.down,
+                out RaycastHit ground,
+                400,
+                Layers.MaskToolRaycast,
+                QueryTriggerInteraction.Ignore
+            );
+            if (!hasGround || ground.point.y < 0.5f) {
+                continue;
+            }
+            Vector3 eye = ground.point + Vector3.up * HullViewHeight;
+            Vector3 target = new Vector3(edge.x, Mathf.Max(ground.point.y + 3, bounds.min.y + 3), edge.z);
+            // Open ground counts for more: a clear line to the hull, and level footing.
+            bool isClear = !Physics.Linecast(
+                eye,
+                Vector3.Lerp(eye, target, 0.85f),
+                Layers.MaskToolRaycast,
+                QueryTriggerInteraction.Ignore
+            );
+            float openness = (isClear ? 1 : 0) + ground.normal.y;
+            if (openness > bestOpenness) {
+                bestOpenness = openness;
+                best = new Pose(eye, Quaternion.LookRotation(target - eye));
+            }
+        }
+        return best;
+    }
+
+    static TrainWagons NearestDrillship(Vector3 playerPosition) {
         TrainWagons nearest = null;
         float nearestDistance = float.MaxValue;
         foreach (TrainWagons wagons in TrainWagons.Instances) {
@@ -202,16 +283,27 @@ internal sealed class CaptureDirector : MonoBehaviour {
                 nearestDistance = distance;
             }
         }
-        if (nearest == null) {
-            Debug.LogWarning($"{WeatherMod.LogPrefix}No drillship to photograph; using the player's view");
-            return null;
-        }
-        var bounds = new Bounds(nearest.transform.position, Vector3.zero);
-        foreach (Renderer renderer in nearest.GetComponentsInChildren<Renderer>()) {
+        return nearest;
+    }
+
+    static Bounds RendererBounds(GameObject root) {
+        var bounds = new Bounds(root.transform.position, Vector3.zero);
+        foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>()) {
             if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer) {
                 bounds.Encapsulate(renderer.bounds);
             }
         }
+        return bounds;
+    }
+
+    /// <summary>A three-quarter view of the drillship nearest the player, from a little above it.</summary>
+    static Pose? FrameNearestDrillship(Vector3 playerPosition) {
+        TrainWagons nearest = NearestDrillship(playerPosition);
+        if (nearest == null) {
+            Debug.LogWarning($"{WeatherMod.LogPrefix}No drillship to photograph; using the player's view");
+            return null;
+        }
+        Bounds bounds = RendererBounds(nearest.gameObject);
         float radius = bounds.extents.magnitude;
         Transform hull = nearest.transform;
         Vector3 offset = (hull.right * 1.3f + hull.forward * 0.7f).normalized * radius * 1.7f;

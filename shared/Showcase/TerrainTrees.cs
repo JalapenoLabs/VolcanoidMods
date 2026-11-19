@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace JalapenoLabs.DayNightCycle.Dev;
+namespace JalapenoLabs.Shared.Showcase;
 
 /// <summary>
 /// Developer captures only: the island's trees, for finding open ground and clear views.
@@ -122,12 +122,12 @@ internal static class TerrainTrees {
         string name = prefab != null ? prefab.name : "missing";
         if (!extent.HasValue) {
             Debug.LogWarning(
-                $"{DayNightCycleMod.LogPrefix}Tree model '{name}' has no readable meshes; treating it as a broad tree"
+                $"{ModIdentity.LogPrefix}Tree model '{name}' has no readable meshes; treating it as a broad tree"
             );
             extent = FallbackModelShape;
         } else {
             Debug.Log(
-                $"{DayNightCycleMod.LogPrefix}Tree model '{name}': extent {extent.Value.min} to {extent.Value.max}"
+                $"{ModIdentity.LogPrefix}Tree model '{name}': extent {extent.Value.min} to {extent.Value.max}"
             );
         }
         if (prefab != null) {

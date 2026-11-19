@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using Object = UnityEngine.Object;
 
-namespace JalapenoLabs.DayNightCycle.Dev;
+namespace JalapenoLabs.Shared.Showcase;
 
 /// <summary>
 /// Developer captures only (-daynight-showcase): puts a fully built drillship on the island for marketing shots.
@@ -41,7 +41,7 @@ internal static class ShowcaseDrillship {
             Site = site;
             Vector3 position = site.transform.position;
             Distance = Vector3.Distance(position, near);
-            Sky = Lighting.SkyExposure.Measure(position + Vector3.up * 2);
+            Sky = MeasureOpenSky(position + Vector3.up * 2);
             Trees = TerrainTrees.Around(position, ClearingReach).Count;
         }
     }
@@ -50,6 +50,29 @@ internal static class ShowcaseDrillship {
     /// Spawns the design at the named surface landing site, or with no name at the most open free one. A drillship
     /// already parked at the named site is moved to the free site nearest it first.
     /// </summary>
+    /// <summary>Straight up, then four directions 40 degrees above the horizon.</summary>
+    static readonly Vector3[] SkyDirections = {
+        Vector3.up,
+        new Vector3(0.766f, 0.643f, 0),
+        new Vector3(-0.766f, 0.643f, 0),
+        new Vector3(0, 0.643f, 0.766f),
+        new Vector3(0, 0.643f, -0.766f),
+    };
+
+    /// <summary>
+    /// How much open sky a point sees, 0 (under a cliff or an arch) to 1 (open ground): the share of five rays up that
+    /// reach 400 m without hitting the game's solid geometry.
+    /// </summary>
+    static float MeasureOpenSky(Vector3 position) {
+        int open = 0;
+        foreach (Vector3 direction in SkyDirections) {
+            if (!Physics.Raycast(position, direction, 400, Layers.MaskToolRaycast, QueryTriggerInteraction.Ignore)) {
+                open++;
+            }
+        }
+        return (float)open / SkyDirections.Length;
+    }
+
     public static Train Spawn(string designPath, string siteName, Vector3 near) {
         if (!(PersistenceJsonExtensions.ReadFromString(File.ReadAllText(designPath)) is DataGameObject design)) {
             throw new InvalidDataException($"{designPath} is not a drillship design");
@@ -68,7 +91,7 @@ internal static class ShowcaseDrillship {
             : MostOpenFreeSite(surveys);
         if (site.Train != null) {
             LandingSite elsewhere = NearestFreeSite(site.transform.position);
-            Debug.Log($"{DayNightCycleMod.LogPrefix}Moving the drillship at '{site.Name}' to '{elsewhere.Name}'");
+            Debug.Log($"{ModIdentity.LogPrefix}Moving the drillship at '{site.Name}' to '{elsewhere.Name}'");
             site.Train.Teleport(elsewhere, TrainState.Deploy, hasFinished: true);
         }
 
@@ -78,7 +101,7 @@ internal static class ShowcaseDrillship {
         NetworkServer.Spawn(train.gameObject);
         int added = FillLightSlots(train);
         Debug.Log(
-            $"{DayNightCycleMod.LogPrefix}Showcase drillship {prefabName} deployed at '{site.Name}' "
+            $"{ModIdentity.LogPrefix}Showcase drillship {prefabName} deployed at '{site.Name}' "
             + $"({Vector3.Distance(site.transform.position, near):0} m away), {added} light(s) added"
         );
         return train;
@@ -109,7 +132,7 @@ internal static class ShowcaseDrillship {
             .ToList();
 
         var report = new System.Text.StringBuilder(
-            $"{DayNightCycleMod.LogPrefix}Surface landing sites (trees within {ClearingReach:0} m):\n"
+            $"{ModIdentity.LogPrefix}Surface landing sites (trees within {ClearingReach:0} m):\n"
         );
         foreach (SiteSurvey survey in surveys) {
             report.AppendLine(
@@ -142,7 +165,7 @@ internal static class ShowcaseDrillship {
     static int FillLightSlots(Train train) {
         if (!RuntimeAssetDatabase.TryGetAsset(LightItemId, out Object asset) || !(asset is ItemDefinition lightItem)) {
             Debug.LogWarning(
-                $"{DayNightCycleMod.LogPrefix}Light item not found; the showcase keeps the design's lights"
+                $"{ModIdentity.LogPrefix}Light item not found; the showcase keeps the design's lights"
             );
             return 0;
         }
@@ -182,7 +205,7 @@ internal static class ShowcaseDrillship {
             tally[slot.SlotName] = counts;
         }
 
-        var report = new System.Text.StringBuilder($"{DayNightCycleMod.LogPrefix}Showcase light slots:");
+        var report = new System.Text.StringBuilder($"{ModIdentity.LogPrefix}Showcase light slots:");
         foreach (KeyValuePair<string, (int Slots, int Filled, int Added)> entry in tally) {
             report.Append(
                 $"\n  {entry.Key}: {entry.Value.Slots} slots, {entry.Value.Filled} already filled, "
@@ -216,7 +239,7 @@ internal static class ShowcaseDrillship {
             }
         }
         Debug.Log(
-            $"{DayNightCycleMod.LogPrefix}Showcase drillship bounds: centre {bounds.center}, size {bounds.size}, "
+            $"{ModIdentity.LogPrefix}Showcase drillship bounds: centre {bounds.center}, size {bounds.size}, "
             + $"length {train.Length:0} m, pivot {pivot}, facing {train.transform.forward}"
         );
         return bounds;

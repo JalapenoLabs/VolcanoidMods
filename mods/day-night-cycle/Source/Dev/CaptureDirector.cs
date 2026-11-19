@@ -7,6 +7,7 @@ using System.IO;
 using System.Text;
 using JalapenoLabs.DayNightCycle.Cycle;
 using JalapenoLabs.DayNightCycle.Lighting;
+using JalapenoLabs.Shared.Showcase;
 using UnityEngine;
 
 namespace JalapenoLabs.DayNightCycle.Dev;
