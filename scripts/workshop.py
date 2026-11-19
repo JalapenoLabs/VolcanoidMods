@@ -117,11 +117,17 @@ def workshop_tags(manifest: dict) -> list[str]:
     return tags
 
 
-def publish(mod: str, visibility: str | None, force_screenshots: bool = False) -> dict:
+def publish(
+    mod: str,
+    visibility: str | None,
+    force_screenshots: bool = False,
+    change_note: str | None = None,
+) -> dict:
     """Build the mod and upload it with its page, then check every image on the live page loads.
 
     Creates the Workshop item on the first upload. The gallery is re-uploaded only when its screenshots changed,
-    unless force_screenshots is set (to repair a gallery whose images Steam lost).
+    unless force_screenshots is set (to repair a gallery whose images Steam lost). The change note defaults to the
+    Changelog.txt line for the manifest's version, which is right for a release; a page-only update passes its own.
     """
     problems = validate_mod(mod)
     if problems:
@@ -142,7 +148,8 @@ def publish(mod: str, visibility: str | None, force_screenshots: bool = False) -
 
     with tempfile.TemporaryDirectory() as scratch:
         change_note_path = Path(scratch) / "change-note.txt"
-        change_note_path.write_text(f"{version}: {changelog_entry(mod, version)}", encoding="utf-8")
+        note = change_note or f"{version}: {changelog_entry(mod, version)}"
+        change_note_path.write_text(note, encoding="utf-8")
 
         arguments = [
             "--content", str(shipped_dir),
@@ -192,7 +199,8 @@ def require_working_images(item_id: str) -> None:
         time.sleep(IMAGE_CHECK_INTERVAL_SECONDS)
     raise SystemExit(
         f"Workshop item {item_id} still has broken images: {'; '.join(broken)}. "
-        "Re-upload the gallery with: scripts/workshop.py publish <mod> --force-screenshots"
+        "Re-upload the gallery with: scripts/workshop.py publish <mod> --force-screenshots "
+        "--change-note \"Fixed the screenshots\""
     )
 
 
@@ -207,7 +215,12 @@ def require_item_id(mod: str) -> str:
 def command_publish(arguments: argparse.Namespace) -> None:
     if is_game_running():
         raise SystemExit("Close Volcanoids first: Steam would see two copies of the game running.")
-    publish(arguments.mod, arguments.visibility, arguments.force_screenshots)
+    if not arguments.change_note and read_workshop_item_id(arguments.mod):
+        raise SystemExit(
+            "Updating the page outside a release: say what changed with --change-note \"...\". "
+            "(scripts/release.py uses the changelog line for new versions.)"
+        )
+    publish(arguments.mod, arguments.visibility, arguments.force_screenshots, arguments.change_note)
 
 
 def command_info(arguments: argparse.Namespace) -> None:
@@ -241,6 +254,10 @@ def main() -> None:
         "--force-screenshots",
         action="store_true",
         help="re-upload the gallery even if unchanged (repairs images Steam lost)",
+    )
+    publish_parser.add_argument(
+        "--change-note",
+        help="the note shown on the item's Change Notes tab; required when updating outside a release",
     )
     publish_parser.set_defaults(handler=command_publish)
 

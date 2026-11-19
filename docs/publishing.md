@@ -69,7 +69,10 @@ to run the tool, and Docker or the .NET SDK to build it. The game must be closed
 3. `scripts/release.py <mod>`.
 
 To change only the Workshop page (description, cover, screenshots) without a new version, run
-`scripts/workshop.py publish <mod>`: it uploads the current build with the current page.
+`scripts/workshop.py publish <mod> --change-note "What changed"`: it uploads the current build with the current
+page. Every upload adds an entry to the item's public Change Notes tab, so a page-only update must say what it
+changed instead of repeating the release's changelog line; the script refuses to update an existing item without
+one. Releases (`release.py`) use the changelog line.
 
 ## What `release.py` checks and does
 
