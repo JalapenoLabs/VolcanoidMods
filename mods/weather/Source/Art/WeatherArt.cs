@@ -50,11 +50,12 @@ public static class WeatherArt {
         }
 
         // How steep the normals are: higher makes the billows read more strongly under the light.
-        const float Relief = 4;
+        const float Relief = 2;
         for (int y = 0; y < size; y++) {
             for (int x = 0; x < size; x++) {
                 float value = density[y * size + x];
-                float alpha = Math.Max(0, Math.Min(1, value * 2.4f));
+                // A long, soft ramp from the edge inwards: vapour, not a solid with a hard outline.
+                float alpha = Math.Max(0, Math.Min(1, value * 1.5f));
                 float v = (y % tileSize + 0.5f) / tileSize * 2 - 1;
                 float shade = 0.72f + 0.2f * (v + 1) / 2 + 0.12f * value;
                 albedo.Set(x, y, shade, shade, shade * 1.02f, alpha);

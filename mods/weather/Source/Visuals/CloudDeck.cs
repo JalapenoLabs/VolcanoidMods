@@ -42,7 +42,18 @@ internal sealed class CloudDeck : IDisposable {
     /// <summary>How far a cloud's fade-in reaches either side of its threshold, in units of cloud cover.</summary>
     const float ArrivalSoftness = 0.14f;
 
-    static readonly Color StormCloudTint = new Color(0.4f, 0.42f, 0.47f);
+    /// <summary>Fair-weather cloud is brilliant white in the sun; storm cloud a heavy blue-grey.</summary>
+    static readonly Color FairCloudTint = new Color(1.15f, 1.15f, 1.18f);
+    static readonly Color StormCloudTint = new Color(0.45f, 0.47f, 0.52f);
+
+    /// <summary>
+    /// Puffs are drawn wider than they are tall, so the heaps read as banks of drifting cloud rather than balls.
+    /// </summary>
+    const float PuffWidth = 1.5f;
+    const float PuffHeight = 0.8f;
+
+    /// <summary>How opaque a fully arrived puff is: thin enough that the painted sky shows through it.</summary>
+    const float PuffOpacity = 0.75f;
 
     readonly struct Puff {
         public readonly Vector3 Offset;
@@ -101,6 +112,7 @@ internal sealed class CloudDeck : IDisposable {
         main.loop = true;
         main.startLifetime = 1e6f;
         main.startSpeed = 0;
+        main.startSize3D = true;
         ParticleSystem.EmissionModule emission = puffSystem.emission;
         emission.enabled = false;
         ParticleSystem.ShapeModule shape = puffSystem.shape;
@@ -142,7 +154,7 @@ internal sealed class CloudDeck : IDisposable {
         }
 
         float stormDarkness = Mathf.Clamp01(weather.Darkness / 0.9f);
-        puffMaterial.SetColor(GameMaterials.BaseColorId, Color.Lerp(Color.white, StormCloudTint, stormDarkness));
+        puffMaterial.SetColor(GameMaterials.BaseColorId, Color.Lerp(FairCloudTint, StormCloudTint, stormDarkness));
 
         var windDirection = new Vector2(Mathf.Sin(weather.WindHeading), Mathf.Cos(weather.WindHeading));
         // Drift from the storm's own start, so every player's clouds sit in the same place.
@@ -157,23 +169,28 @@ internal sealed class CloudDeck : IDisposable {
             Vector2 world = cloud.Origin + drift;
             var relative = new Vector2(Wrap(world.x - camera.x, half), Wrap(world.y - camera.y, half));
             float distance = Mathf.Max(Mathf.Abs(relative.x), Mathf.Abs(relative.y)) / half;
-            float edgeFade = 1 - Mathf.SmoothStep(FadeStart, 1, distance);
+            float edgeFade = 1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(FadeStart, 1, distance));
 
             // Upwind clouds arrive first: the front's position runs 0 (upwind edge) to 1 (downwind edge).
             float front = 0.5f + 0.5f * Vector2.Dot(relative, windDirection) / half;
             float threshold = 0.06f + 0.55f * front + 0.3f * cloud.Lateness;
-            float arrival = Mathf.SmoothStep(threshold - ArrivalSoftness, threshold + ArrivalSoftness, weather.Cover);
-            float visibility = arrival * edgeFade;
+            float arrival = Mathf.SmoothStep(
+                0,
+                1,
+                Mathf.InverseLerp(threshold - ArrivalSoftness, threshold + ArrivalSoftness, weather.Cover)
+            );
+            float visibility = arrival * edgeFade * PuffOpacity;
             if (visibility <= 0.001f) {
                 continue;
             }
 
             var cloudCentre = new Vector3(camera.x + relative.x, cloudBase, camera.y + relative.y);
             foreach (Puff puff in cloud.Puffs) {
+                // Puffs swell as their cloud billows in.
+                float size = puff.Size * (0.55f + 0.45f * arrival);
                 particles[count++] = new ParticleSystem.Particle {
-                    // Puffs swell as their cloud billows in.
                     position = cloudCentre + puff.Offset * (0.7f + 0.3f * arrival),
-                    startSize = puff.Size * (0.55f + 0.45f * arrival),
+                    startSize3D = new Vector3(size * PuffWidth, size * PuffHeight, size),
                     startColor = new Color32(puff.Shade, puff.Shade, puff.Shade, (byte)(255 * visibility)),
                     remainingLifetime = 1e6f,
                     startLifetime = 1e6f,

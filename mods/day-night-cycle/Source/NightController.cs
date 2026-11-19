@@ -42,6 +42,13 @@ internal sealed class NightController : MonoBehaviour {
 
     static readonly int SurfaceZoneMask = Layers.GetMask(Layers.MainZone);
 
+    /// <summary>
+    /// Cloud cover a weather mod (such as Jalapeno Labs' Rain &amp; Thunderstorms) may publish, 0 clear to 1 overcast, as
+    /// a global shader value. It is the only link between the night and a weather mod, so neither needs the other;
+    /// unset, it reads 0.
+    /// </summary>
+    static readonly int CloudCoverId = Shader.PropertyToID("_JalapenoLabs_CloudCover");
+
     readonly List<ICameraEffect> effects = new List<ICameraEffect>();
     readonly Dictionary<Camera, CameraState> cameras = new Dictionary<Camera, CameraState>();
 
@@ -107,6 +114,8 @@ internal sealed class NightController : MonoBehaviour {
     NightFrame SampleFrame() {
         // Read in Update, after the night has put the sun back: this is the eruption timeline's own brightness.
         float skyClarity = Mathf.Clamp01(sun.intensity / NightLook.GameSunIntensity);
+        // Storm cloud hides the night sky and its moonlight, as eruption ash does.
+        skyClarity = Mathf.Min(skyClarity, 1 - Mathf.Clamp01(Shader.GetGlobalFloat(CloudCoverId)));
         return geometry.Evaluate(CycleSchedule.Sample(clock.Now), skyClarity);
     }
 

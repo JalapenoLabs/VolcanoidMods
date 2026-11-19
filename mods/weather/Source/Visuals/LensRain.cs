@@ -34,6 +34,19 @@ internal sealed class LensRain : IDisposable {
     readonly RawImage[] images = new RawImage[MaxDrops];
     readonly Drop[] drops = new Drop[MaxDrops];
     float spawnBudget;
+
+    /// <summary>For developer logs.</summary>
+    public string Describe() {
+        int active = Array.FindAll(drops, drop => drop.IsActive).Length;
+        int first = Array.FindIndex(drops, drop => drop.IsActive);
+        string sample = first >= 0
+            ? $" first at {images[first].rectTransform.anchoredPosition} size {images[first].rectTransform.sizeDelta} "
+                + $"colour {images[first].color} scale {images[first].rectTransform.lossyScale}"
+            : "";
+        return $"lens: {active} drops, canvas {(canvas.enabled ? "on" : "off")} on {Screen.width}x{Screen.height}"
+            + $" ({canvas.renderMode}, order {canvas.sortingOrder}){sample}";
+    }
+
     StormRandom random = new StormRandom(0x1E25_D20FUL);
 
     public LensRain(Transform parent, StormTextures textures) {
@@ -60,8 +73,10 @@ internal sealed class LensRain : IDisposable {
     /// <param name="rain">How hard it rains, 0 to 1.</param>
     /// <param name="outdoors">0 under a roof, 1 out in the open.</param>
     /// <param name="camera">The player's camera, to tell when they look up into the rain.</param>
-    public void Update(float rain, float outdoors, Camera camera, float deltaTime) {
-        bool isHudShown = Options.Instance != null && Options.Instance.ShowHUD && InputManager.ShowHud;
+    /// <param name="isForced">For developer captures: show the drops even though the HUD is hidden.</param>
+    public void Update(float rain, float outdoors, Camera camera, float deltaTime, bool isForced) {
+        bool isHudShown = isForced
+            || (Options.Instance != null && Options.Instance.ShowHUD && InputManager.ShowHud);
         canvas.enabled = isHudShown;
         if (!isHudShown) {
             return;
@@ -88,7 +103,7 @@ internal sealed class LensRain : IDisposable {
                 continue;
             }
             float fadeIn = Mathf.Clamp01(drop.Age / 0.08f);
-            float fadeOut = 1 - Mathf.SmoothStep(drop.Life * 0.55f, drop.Life, drop.Age);
+            float fadeOut = 1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(drop.Life * 0.55f, drop.Life, drop.Age));
             images[index].color = new Color(1, 1, 1, fadeIn * fadeOut * 0.85f);
             // Heavier drops gather and run down the lens after a moment.
             if (drop.Age > 0.5f && drop.SlideSpeed > 0) {

@@ -133,8 +133,9 @@ internal sealed class WeatherAudio : IDisposable {
         windFilter.cutoffFrequency = Mathf.Lerp(ShelteredCutoff * 2, OpenCutoff, outdoors);
 
         // Light rain is mostly patter; as it strengthens the patter drowns in the downpour's roar.
-        float patterShare = Mathf.Clamp01(rain / 0.3f) * (1 - Mathf.SmoothStep(0.35f, 0.9f, rain));
-        float downpourShare = Mathf.SmoothStep(0.15f, 1, rain);
+        float drowned = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.35f, 0.9f, rain));
+        float patterShare = Mathf.Clamp01(rain / 0.3f) * (1 - drowned);
+        float downpourShare = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.15f, 1, rain));
         patter.volume = 0.75f * patterShare * level;
         downpour.volume = 0.85f * downpourShare * level;
 

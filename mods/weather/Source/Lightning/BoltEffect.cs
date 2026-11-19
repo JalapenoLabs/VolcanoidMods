@@ -218,7 +218,7 @@ internal sealed class BoltEffect : IDisposable {
             }
         }
         // The channel stays faintly lit between strokes, then fades out.
-        float glow = 0.18f * (1 - Mathf.SmoothStep(Lifetime * 0.55f, Lifetime, age));
+        float glow = 0.18f * (1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(Lifetime * 0.55f, Lifetime, age)));
         level = Mathf.Max(level, glow);
         Brightness = level * power;
 

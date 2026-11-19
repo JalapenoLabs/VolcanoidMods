@@ -70,6 +70,7 @@ internal sealed class CaptureDirector : MonoBehaviour {
     bool isPoseOverridden;
     bool wasHudShown;
     bool wasFpsShown;
+    bool hasTestedDamage;
 
     public void Begin(WeatherController weatherController, DevOptions options) {
         controller = weatherController;
@@ -119,6 +120,10 @@ internal sealed class CaptureDirector : MonoBehaviour {
             DevOptions.Moment shot = devOptions.Shots[shotIndex];
             controller.Clock.Hold(SyncedClock.FindMoment(controller.Clock.Now, shot));
             yield return null;
+            if (devOptions.IsTestingDamage && shot.Kind == Forecast.StormKind.Thunderstorm && !hasTestedDamage) {
+                hasTestedDamage = true;
+                yield return TestDamage();
+            }
 
             foreach (View view in views) {
                 Pose? pose = view.Pose();
@@ -127,6 +132,7 @@ internal sealed class CaptureDirector : MonoBehaviour {
                 // A lifted camera stands out in the open, whatever the player is doing.
                 controller.Location.Override = pose.HasValue ? Exposure.Outside : (Exposure?)null;
                 controller.EyeOverride = pose?.position;
+                controller.IsLensRainForced = view.Name == "lens";
                 if (pose.HasValue) {
                     Debug.Log($"{WeatherMod.LogPrefix}{view.Name} camera at {pose.Value.position}");
                 }
@@ -145,8 +151,47 @@ internal sealed class CaptureDirector : MonoBehaviour {
             }
         }
 
+        controller.IsLensRainForced = false;
         Debug.Log($"{WeatherMod.LogPrefix}Capture finished; quitting");
         Application.Quit();
+    }
+
+    /// <summary>
+    /// Developer test (-weather-test-damage): strikes the player, treated as out in the open, and the nearest cog, and
+    /// logs their health before and after. Damage is the host's to deal, as in a single-player game here.
+    /// </summary>
+    IEnumerator TestDamage() {
+        controller.Location.Override = Exposure.Outside;
+        yield return null;
+        var targets = new List<Health>();
+        if (Player.Local != null && Player.Local.TryGetComponent(out PlayerHealth playerHealth)) {
+            targets.Add(playerHealth);
+        }
+        Health nearestCog = null;
+        float nearestDistance = float.MaxValue;
+        foreach (Agent agent in Agent.Instances) {
+            if (agent == null || !(agent.Health is CogHealth cog) || cog.IsDead) {
+                continue;
+            }
+            float distance = Vector3.Distance(agent.transform.position, screenCamera.transform.position);
+            if (distance < nearestDistance) {
+                nearestCog = cog;
+                nearestDistance = distance;
+            }
+        }
+        if (nearestCog != null) {
+            targets.Add(nearestCog);
+        } else {
+            Debug.Log($"{WeatherMod.LogPrefix}Damage test: no cog on the island to strike");
+        }
+        foreach (Health target in targets) {
+            float before = target.CurrentHP;
+            controller.StrikeAt(target.transform.position);
+            yield return new WaitForSecondsRealtime(1);
+            Debug.Log($"{WeatherMod.LogPrefix}Damage test: {target.name} went from {before:0} to "
+                + $"{target.CurrentHP:0} of {target.MaxHP} health");
+        }
+        controller.Location.Override = null;
     }
 
     List<View> BuildViews(Vector3 playerPosition, Train showcase) {
@@ -171,6 +216,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                     break;
                 case "drillship":
                     views.Add(new View(name, () => FrameNearestDrillship(playerPosition), DrillshipViewFieldOfView));
+                    break;
+                case "lens":
+                    views.Add(new View(name, () => LookTowardsVolcano(focus), IslandViewFieldOfView));
                     break;
                 case "hull":
                     views.Add(new View(name, () => CloseToHull(showcase, playerPosition), HullViewFieldOfView));

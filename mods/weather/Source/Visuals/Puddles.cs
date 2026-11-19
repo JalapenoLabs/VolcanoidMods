@@ -257,7 +257,8 @@ internal sealed class Puddles : IDisposable {
                     continue;
                 }
                 Spot spot = found.Value;
-                float appearance = Mathf.SmoothStep(spot.Threshold, spot.Threshold + 0.15f, wetness);
+                float filling = Mathf.InverseLerp(spot.Threshold, spot.Threshold + 0.15f, wetness);
+                float appearance = Mathf.SmoothStep(0, 1, filling);
                 float distance = Vector3.Distance(spot.Position, centre);
                 if (appearance > 0.01f && distance < Reach) {
                     showing.Add(new Showing(spot, appearance, distance));

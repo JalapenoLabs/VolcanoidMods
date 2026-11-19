@@ -133,15 +133,19 @@ internal sealed class StormAmbience {
         float reflectionScale = (1 - StormLook.AmbientDimming * darkness) + StormLook.FlashAmbientBoost * flash;
         RenderSettings.reflectionIntensity = savedReflectionIntensity * reflectionScale;
 
-        // Light rain thins the storm sky; heavier storms close it completely.
-        float darkShare = Mathf.Clamp01(darkness / 0.9f);
-        float stormSkyShare = Mathf.Clamp01(
-            cover * (StormLook.StormSkyShare + (1 - StormLook.StormSkyShare) * darkShare)
-        );
+        float stormSkyShare = StormSkyShare(cover, darkness);
         Darken(RenderSettings.skybox, darkness, stormSkyShare, flash);
         foreach (Material waterMaterial in waterMaterials) {
             Darken(waterMaterial, darkness, stormSkyShare, flash);
         }
+    }
+
+    /// <summary>
+    /// How much of the sky the storm closes over, 0 to 1: light rain thins the storm sky; heavier storms close it.
+    /// </summary>
+    public static float StormSkyShare(float cover, float darkness) {
+        float darkShare = Mathf.Clamp01(darkness / 0.9f);
+        return Mathf.Clamp01(cover * (StormLook.StormSkyShare + (1 - StormLook.StormSkyShare) * darkShare));
     }
 
     void Darken(Material material, float darkness, float stormSkyShare, float flash) {

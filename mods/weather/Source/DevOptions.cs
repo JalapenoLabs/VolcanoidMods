@@ -19,12 +19,15 @@ namespace JalapenoLabs.Weather;
 ///   -weather-speed 10           run the weather 10 times faster (with -weather-at, starting from that moment)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
-///   -weather-views LIST         which views to capture (island, sky, drillship, hull, player); default all
+///   -weather-views LIST         views to capture (island, sky, drillship, hull, lens, player); default all
+///                               (lens: the island view with the raindrops on the lens shown, though the HUD is off)
 ///   -weather-dump-sounds DIR    write every synthesised sound as a WAV file into DIR
 ///   -weather-survey             log the game's particle materials, water and lava, for building the storm's effects
 ///   -weather-showcase FILE      with a capture, spawn this drillship design fully built and lit, and centre the views
 ///                               on it (the drillship view frames it with clear sightlines)
 ///   -weather-showcase-site NAME the surface landing site to spawn it at (default: the most open free one)
+///   -weather-test-damage        in the first thunderstorm moment, strike the player (out in the open) and the nearest
+///                               cog, and log their health before and after
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>A moment within a storm of one kind.</summary>
@@ -52,7 +55,7 @@ internal sealed class DevOptions {
         [StormKind.Thunderstorm] = "thunder",
     };
 
-    static readonly string[] AllViews = { "island", "sky", "drillship", "hull", "player" };
+    static readonly string[] AllViews = { "island", "sky", "drillship", "hull", "lens", "player" };
 
     public readonly Moment? Hold;
     public readonly double Speed;
@@ -65,6 +68,7 @@ internal sealed class DevOptions {
     public readonly string ShowcaseDesign;
     /// <summary>The landing site to spawn the showcase drillship at, or null for the most open free one.</summary>
     public readonly string ShowcaseSite;
+    public readonly bool IsTestingDamage;
 
     DevOptions(
         Moment? hold,
@@ -75,7 +79,8 @@ internal sealed class DevOptions {
         string soundDumpDirectory,
         bool isSurveying,
         string showcaseDesign,
-        string showcaseSite
+        string showcaseSite,
+        bool isTestingDamage
     ) {
         Hold = hold;
         Speed = speed;
@@ -86,6 +91,7 @@ internal sealed class DevOptions {
         IsSurveying = isSurveying;
         ShowcaseDesign = showcaseDesign;
         ShowcaseSite = showcaseSite;
+        IsTestingDamage = isTestingDamage;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
@@ -133,7 +139,8 @@ internal sealed class DevOptions {
             soundDumpDirectory: ReadValue(arguments, "-weather-dump-sounds"),
             isSurveying: Array.IndexOf(arguments, "-weather-survey") >= 0,
             showcaseDesign: ReadValue(arguments, "-weather-showcase"),
-            showcaseSite: ReadValue(arguments, "-weather-showcase-site")
+            showcaseSite: ReadValue(arguments, "-weather-showcase-site"),
+            isTestingDamage: Array.IndexOf(arguments, "-weather-test-damage") >= 0
         );
     }
 

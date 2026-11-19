@@ -28,6 +28,12 @@ internal sealed class WeatherController : MonoBehaviour {
         Clearing,
     }
 
+    /// <summary>
+    /// The cloud cover Day/Night Cycle reads (a global shader value, the only link between the two mods): under it the
+    /// night hides its stars, moon and moonlight.
+    /// </summary>
+    static readonly int CloudCoverId = Shader.PropertyToID("_JalapenoLabs_CloudCover");
+
     readonly PlayerLocation location = new PlayerLocation();
     readonly List<IDisposable> parts = new List<IDisposable>();
 
@@ -62,6 +68,9 @@ internal sealed class WeatherController : MonoBehaviour {
     /// centre around it rather than around the player far below; null otherwise.
     /// </summary>
     public Vector3? EyeOverride { get; set; }
+
+    /// <summary>Developer captures set this to photograph the raindrops on the lens, which follow the hidden HUD.</summary>
+    public bool IsLensRainForced { get; set; }
 
     public static WeatherController Create(Scene gameScene, SyncedClock clock, DevOptions devOptions) {
         var host = new GameObject("Weather");
@@ -145,6 +154,7 @@ internal sealed class WeatherController : MonoBehaviour {
         StartVisuals();
 
         volume?.Update(weather.Cover * surface, weather.Darkness, weather.Rain);
+        Shader.SetGlobalFloat(CloudCoverId, StormAmbience.StormSkyShare(weather.Cover, weather.Darkness));
         if (viewCamera != null) {
             Vector3 eye = EyeOverride ?? viewCamera.transform.position;
             Vector3 wind = new Vector3(Mathf.Sin(weather.WindHeading), 0, Mathf.Cos(weather.WindHeading))
@@ -154,7 +164,13 @@ internal sealed class WeatherController : MonoBehaviour {
             rain?.Update(weather.Rain, wind, eye, surface);
             lightning?.Update(in weather, now, viewCamera, location, audio);
             puddles?.Update(weather.Wetness, weather.Rain, eye, surface, Time.deltaTime);
-            lensRain?.Update(weather.Rain * surface, location.Outdoors, viewCamera, Time.unscaledDeltaTime);
+            lensRain?.Update(
+                weather.Rain * surface,
+                location.Outdoors,
+                viewCamera,
+                Time.unscaledDeltaTime,
+                IsLensRainForced
+            );
             wetSurfaces?.Update(weather.Wetness, weather.Rain * surface, eye, Time.deltaTime);
             steam?.Update(weather.Rain, wind, eye, surface);
         }
@@ -179,6 +195,11 @@ internal sealed class WeatherController : MonoBehaviour {
         return true;
     }
 
+    /// <summary>For developer tests: brings a bolt down on a chosen spot, now.</summary>
+    public void StrikeAt(Vector3 spot) {
+        lightning?.StrikeNow(spot, clock.Now, viewCamera, location, audio);
+    }
+
     void OnBeforeRender() {
         float surface = location.Surface;
         sun?.Apply(weather.Darkness * surface, weather.Cover * surface);
@@ -200,6 +221,7 @@ internal sealed class WeatherController : MonoBehaviour {
         RenderPipelineManager.endContextRendering -= OnEndContextRendering;
         ambience?.Restore();
         sun?.Release();
+        Shader.SetGlobalFloat(CloudCoverId, 0);
         foreach (IDisposable part in parts) {
             part.Dispose();
         }
@@ -214,6 +236,7 @@ internal sealed class WeatherController : MonoBehaviour {
     public void LogBaseline(string when) {
         float baseline = RenderSettings.ambientProbe[0, 0];
         string puddleReport = puddles != null ? $", {puddles.Describe()}" : "";
+        puddleReport += lensRain != null ? $", {lensRain.Describe()}" : "";
         Debug.Log($"{WeatherMod.LogPrefix}Storm {when}: {weather.Storm.Kind}, cover {weather.Cover:0.00}, "
             + $"rain {weather.Rain:0.00}, wetness {weather.Wetness:0.00}{puddleReport}, "
             + $"baseline ambient {baseline:0.000}");
