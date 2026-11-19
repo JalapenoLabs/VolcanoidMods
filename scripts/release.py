@@ -74,29 +74,26 @@ def tag_release(tag: str, message: str) -> None:
 
 
 def release_notes(mod: str, manifest: dict, item_id: str) -> str:
+    """The GitHub release body. One line per paragraph: GitHub renders a single line break in release notes as a
+    break, so hard-wrapped prose would split mid-sentence."""
     version = manifest["Version"]
     folder = shipped_name(mod)
     workshop_url = WORKSHOP_URL.format(item_id=item_id)
-    return f"""{changelog_entry(mod, version)}
-
-## Install
-
-**Steam Workshop (recommended):** [subscribe to {manifest['Title']}]({workshop_url}), then turn it on in the game's
-Mods menu. Steam keeps it up to date.
-
-**By hand:** download `{folder}-{version}.zip` below and unzip it into the game's `LocalMods` folder, so you get
-`LocalMods/{folder}/`:
-
-- Windows: `%USERPROFILE%\\AppData\\LocalLow\\Volcanoid\\Volcanoids\\LocalMods`
-- Linux: `~/.config/unity3d/Volcanoid/Volcanoids/LocalMods`
-
-Then turn it on in the game's Mods menu. A save that lists a hand-installed mod cannot host multiplayer; the Workshop
-copy can.
-
-More about the mod: [README](https://github.com/{GITHUB_REPOSITORY}/tree/main/mods/{mod}#readme)
-
-Enjoying it? [Support Jalapeno Labs on Patreon]({PATREON_URL}).
-"""
+    paragraphs = [
+        changelog_entry(mod, version),
+        "## Install",
+        f"**Steam Workshop (recommended):** [subscribe to {manifest['Title']}]({workshop_url}), then turn it on in the "
+        "game's Mods menu. Steam keeps it up to date.",
+        f"**By hand:** download `{folder}-{version}.zip` below and unzip it into the game's `LocalMods` folder, so you "
+        f"get `LocalMods/{folder}/`:",
+        "- Windows: `%USERPROFILE%\\AppData\\LocalLow\\Volcanoid\\Volcanoids\\LocalMods`\n"
+        "- Linux: `~/.config/unity3d/Volcanoid/Volcanoids/LocalMods`",
+        "Then turn it on in the game's Mods menu. A save that lists a hand-installed mod cannot host multiplayer; the "
+        "Workshop copy can.",
+        f"More about the mod: [README](https://github.com/{GITHUB_REPOSITORY}/tree/main/mods/{mod}#readme)",
+        f"Enjoying it? [Support Jalapeno Labs on Patreon]({PATREON_URL}).",
+    ]
+    return "\n\n".join(paragraphs) + "\n"
 
 
 def create_github_release(tag: str, title: str, notes: str, archive_path: Path) -> None:
