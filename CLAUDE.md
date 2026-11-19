@@ -16,6 +16,7 @@ shared build settings, tooling, CI and docs. There are no submodules.
 | Releases: Workshop page, tags, GitHub releases | `docs/publishing.md` |
 | Decompiling the game and reading its bundles; the island's lighting, scenery and drillships as found | `docs/reverse-engineering.md` |
 | Day/Night Cycle's requirements and design | `docs/day-night-cycle.md` |
+| Rain & Thunderstorms' requirements and design | `docs/weather.md` |
 
 ## Repository structure
 
@@ -38,6 +39,7 @@ docs/                  one document per area of decisions
 | Mod | Shipped folder | Multiplayer mode | Notes |
 | --- | --- | --- | --- |
 | `day-night-cycle` | `DayNightCycle` | ClientOnly (2) | 30 min day / 20 min night, hardcoded; synced by UTC + Steam time. Workshop item in `Workshop/item-id` |
+| `weather` | `Weather` | ClientOnly (2) | Rain & Thunderstorms: a storm an hour (light, heavy or thunder), synced by UTC + Steam time; lightning damages on the host only. Not yet on the Workshop |
 
 ## Key conventions and constraints
 

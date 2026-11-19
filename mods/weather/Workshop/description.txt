@@ -1,1 +1,36 @@
-Work in progress.
+The island gets weather. Rain & Thunderstorms brings [b]rain and lightning storms[/b] to Volcanoids.
+About once an hour, clouds roll in over a few minutes and darken, and it rains for ten minutes before the sky slowly clears again. Each storm is one of three kinds:
+[list]
+[*][b]Light rain:[/b] grey clouds that still let some sky through, a light shower and small puddles.
+[*][b]Heavy rain:[/b] dark clouds, dim light, a downpour with mist on the horizon, and puddles that spread.
+[*][b]Thunderstorm:[/b] heavy rain with lightning. Bolts crawl through the clouds and light them up from inside, and thunder rolls in after them, sooner and louder the closer they strike.
+[/list]
+Lightning lands mostly at random, but it prefers tall things: a strike close to a player, a COG or a drillship jumps to it. A direct hit hurts, so head for cover when the thunder gets close.
+[h2]What comes with the storm[/h2]
+[list]
+[*]Rain loud and clear outside, muffled and cozy inside a drillship, a mine or a shelter, and drumming on the hull when you stand next to a drillship.
+[*]Raindrops landing on your view and running down it while you're out in the open.
+[*]Puddles that gather on open ground, ripple in the rain and dry up afterwards.
+[*]Glossy wet ground and hulls, rain splashing off the drillships and pouring off their roof edges.
+[*]A rising sea: bigger swells, whitecaps and chop.
+[*]Lava pools that steam all the time and boil off great white clouds in the rain, thick enough that you can barely see through them.
+[/list]
+Underground, all of it stops, and it comes back as you reach the surface.
+[h2]Multiplayer[/h2]
+[b]Client-side only.[/b] Install it whether you host, join or play alone. It only changes what you see and hear: nothing is sent over the network, it never blocks joining a game, and friends without it are unaffected.
+Friends who also run the mod get [b]the same storms at the same moment, down to every lightning bolt[/b], even if the host doesn't have it, because every copy reads the weather from the same clock.
+Lightning only does damage when the host has the mod (the game applies damage on the host). It hurts the host's character and COGs; friends who join see the same bolts without taking damage.
+[h2]Good to know[/h2]
+[list]
+[*]Works with [b]Day/Night Cycle[/b]: storms come by day and by night, and storm clouds hide the moon and stars.
+[*]Loading a save made without the mod shows the game's mod-mismatch dialog: choose [b]Continue[/b] to play it with the weather on.
+[*]The weather runs on real time: storms keep coming while the game is paused, and a save does not remember its weather.
+[*]Armour soaks up a strike like any other hit, and being under a roof keeps you safe from lightning entirely.
+[*]No settings: the storm schedule is fixed.
+[/list]
+[h2]Links[/h2]
+[list]
+[*][url=https://github.com/JalapenoLabs/VolcanoidMods/tree/main/mods/weather]Source code on GitHub[/url] (MIT license)
+[*][url=https://www.jalapenolabs.io/patreon]Support Jalapeno Labs on Patreon[/url]
+[/list]
+Made by [url=https://www.jalapenolabs.io]Jalapeno Labs[/url].

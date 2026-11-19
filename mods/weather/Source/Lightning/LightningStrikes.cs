@@ -28,8 +28,8 @@ internal sealed class LightningStrikes : IDisposable {
     /// <summary>How close a strike must land to a player, cog or drillship to jump to it.</summary>
     const float AttractionRadius = 25;
 
-    /// <summary>How close to a bolt's landing point something must be to be hurt.</summary>
-    const float DamageRadius = 7;
+    /// <summary>How close to a bolt's landing point the middle of a player or cog must be for it to be hurt.</summary>
+    const float DamageRadius = 9;
 
     /// <summary>A strike takes up to this share of the struck player's or cog's health, scaled by its power.</summary>
     const float DamageShare = 0.6f;
@@ -230,7 +230,7 @@ internal sealed class LightningStrikes : IDisposable {
         GameObject source = Island.Current != null ? Island.Current.gameObject : null;
         GameObject local = Player.Local;
         if (local != null && location.Exposure == Exposure.Outside
-            && Vector3.Distance(local.transform.position, point) < DamageRadius + 2
+            && Vector3.Distance(local.transform.position, point) < DamageRadius
             && local.TryGetComponent(out PlayerHealth playerHealth) && !playerHealth.IsDead) {
             Hurt(playerHealth, point, power, source);
         }
@@ -242,7 +242,7 @@ internal sealed class LightningStrikes : IDisposable {
             if (agent.gameObject.layer == Layers.AgentInside) {
                 continue;
             }
-            if (Vector3.Distance(agent.transform.position, point) < DamageRadius + 2) {
+            if (Vector3.Distance(agent.transform.position, point) < DamageRadius) {
                 Hurt(cog, point, power, source);
             }
         }

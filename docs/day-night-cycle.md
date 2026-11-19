@@ -83,8 +83,9 @@ lava glow. The island's 76 baked light probes expose no coefficients to scripts 
 nor `LightProbes.GetSharedLightProbesForScene`), so the indirect part of the light on moving objects keeps its daytime
 level; the darker sun, ambient and reflections still dim them. The scene report logs whether that ever changes.
 
-The volume's priority sits above the island-wide weather volumes (0 to 5) and below the local lava and blast-wave
-volumes (10), so lava keeps its own red haze at night, and the deploy, stun and armour effects (20 and up) stay on top.
+The volume's priority sits above the game's island-wide atmosphere volumes (0 to 5) and Rain & Thunderstorms' storm
+fog (7), and below the local lava and blast-wave volumes (10), so lava keeps its own red haze at night, and the deploy,
+stun and armour effects (20 and up) stay on top.
 
 ### The night sky
 
@@ -99,10 +100,14 @@ the identical sky: 5,500 stars clustered along a Milky Way tilted 62 degrees fro
 repainted for each phase, its bright side turned towards the sun below the horizon; and a band of night-fog colour
 round the horizon that fades stars and a setting moon into the haze.
 
-### Eruptions
+### Eruptions and storm clouds
 
 The game dims its sun under eruption ash. The night reads that brightness against the usual 1.8 as sky clarity and
 dims the moonlight, stars and moon by it, so ash hides the night sky too, without the mod knowing about eruptions.
+
+A weather mod may publish its cloud cover as the global shader value `_JalapenoLabs_CloudCover`, from 0 (clear) to 1
+(overcast). The night caps its sky clarity at one minus that cover, so storm clouds hide the stars, moon and moonlight.
+Rain & Thunderstorms publishes it (`docs/weather.md`); with no weather mod the value reads 0 and changes nothing.
 
 ## Tuning
 

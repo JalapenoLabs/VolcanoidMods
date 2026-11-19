@@ -15,8 +15,9 @@ namespace JalapenoLabs.Weather;
 /// waiting up to an hour for one. A moment is a storm kind (light, heavy or thunder) and a progress through it: -1 as
 /// its clouds start rolling in, 0 as the rain starts, 1 as it stops, 2 once the sky is clear.
 ///
-///   -weather-at thunder@0.5     hold the next thunderstorm halfway through its rain
-///   -weather-speed 10           run the weather 10 times faster (with -weather-at, starting from that moment)
+///   -weather-at thunder@-1      start the weather at a moment of the next storm of that kind, and run on from there
+///   -weather-hold               with -weather-at, freeze the weather at that moment instead
+///   -weather-speed 10           run the weather 10 times faster (from the -weather-at moment, if given)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
 ///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player); default all
@@ -57,7 +58,10 @@ internal sealed class DevOptions {
 
     static readonly string[] AllViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player" };
 
-    public readonly Moment? Hold;
+    /// <summary>The moment the weather starts from instead of the shared clock, or null.</summary>
+    public readonly Moment? Start;
+    /// <summary>Whether the weather stays frozen at <see cref="Start"/>.</summary>
+    public readonly bool IsFrozen;
     public readonly double Speed;
     public readonly string CaptureDirectory;
     public readonly IReadOnlyList<Moment> Shots;
@@ -71,7 +75,8 @@ internal sealed class DevOptions {
     public readonly bool IsTestingDamage;
 
     DevOptions(
-        Moment? hold,
+        Moment? start,
+        bool isFrozen,
         double speed,
         string captureDirectory,
         List<Moment> shots,
@@ -82,7 +87,8 @@ internal sealed class DevOptions {
         string showcaseSite,
         bool isTestingDamage
     ) {
-        Hold = hold;
+        Start = start;
+        IsFrozen = isFrozen;
         Speed = speed;
         CaptureDirectory = captureDirectory;
         Shots = shots;
@@ -96,7 +102,7 @@ internal sealed class DevOptions {
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
 
-    public bool IsDefault => !Hold.HasValue && Speed == 1 && !IsCapturing && SoundDumpDirectory == null
+    public bool IsDefault => !Start.HasValue && Speed == 1 && !IsCapturing && SoundDumpDirectory == null
         && !IsSurveying;
 
     public static DevOptions FromCommandLine() {
@@ -129,9 +135,16 @@ internal sealed class DevOptions {
             views.Add(name);
         }
 
-        string holdText = ReadValue(arguments, "-weather-at");
+        string startText = ReadValue(arguments, "-weather-at");
+        Moment? start = startText != null ? ParseMoment(startText, "-weather-at") : null;
+        bool isFrozen = Array.IndexOf(arguments, "-weather-hold") >= 0;
+        if (isFrozen && !start.HasValue) {
+            Debug.LogWarning($"{WeatherMod.LogPrefix}-weather-hold needs a moment from -weather-at; ignoring it");
+            isFrozen = false;
+        }
         return new DevOptions(
-            hold: holdText != null ? ParseMoment(holdText, "-weather-at") : null,
+            start: start,
+            isFrozen: isFrozen,
             speed: ParseNumber(ReadValue(arguments, "-weather-speed"), "-weather-speed") ?? 1,
             captureDirectory: captureDirectory,
             shots: shots,
@@ -148,9 +161,12 @@ internal sealed class DevOptions {
         if (IsDefault) {
             return "Running on the shared clock.";
         }
-        string hold = Hold.HasValue
-            ? $"held at {Hold.Value.Label}"
-            : "not held";
+        string start = "on the shared clock";
+        if (Start.HasValue) {
+            start = IsFrozen
+                ? $"held at {Start.Value.Label}"
+                : $"starting at {Start.Value.Label}";
+        }
         string capture = IsCapturing
             ? $", capturing {Shots.Count} moments ({string.Join(", ", Views)}) into {CaptureDirectory}"
                 + (ShowcaseDesign != null ? $" around a showcase drillship from {ShowcaseDesign}" : "")
@@ -161,7 +177,7 @@ internal sealed class DevOptions {
         string survey = IsSurveying
             ? ", surveying the scene"
             : "";
-        return $"Developer weather: {hold}, speed x{Speed}{capture}{sounds}{survey}.";
+        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}.";
     }
 
     static Moment? ParseMoment(string text, string option) {

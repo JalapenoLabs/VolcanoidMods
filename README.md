@@ -8,6 +8,7 @@ build tooling, CI and docs are shared at the root so each mod stays small.
 | Mod | Description | Multiplayer | Steam |
 | --- | --- | --- | --- |
 | [day-night-cycle](mods/day-night-cycle) | A 30-minute day and 20-minute night: sunsets, stars, the Milky Way and a phasing moon | Client-side only | [Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3842322377) |
+| [weather](mods/weather) | Rain & Thunderstorms: a storm about once an hour, with lightning, puddles, rough seas and steaming lava | Client-side only | Coming soon |
 
 ## Prerequisites
 

@@ -23,8 +23,8 @@ internal sealed class SyncedClock {
     enum Mode {
         /// <summary>Normal play: the shared wall clock.</summary>
         Live,
-        /// <summary>Developer speed-up: runs from an anchor moment at a multiple of real time.</summary>
-        Accelerated,
+        /// <summary>Developer weather: runs on from a chosen moment, at real time or a multiple of it.</summary>
+        Anchored,
         /// <summary>Developer hold: frozen at one moment.</summary>
         Held,
     }
@@ -46,14 +46,13 @@ internal sealed class SyncedClock {
         anchorSeconds = WallSeconds();
         mode = speed == 1
             ? Mode.Live
-            : Mode.Accelerated;
+            : Mode.Anchored;
 
-        if (devOptions.Hold.HasValue) {
-            anchorSeconds = FindMoment(anchorSeconds, devOptions.Hold.Value);
-            // On its own, -weather-at freezes the weather. With -weather-speed it is the starting point instead.
-            mode = speed == 1
+        if (devOptions.Start.HasValue) {
+            anchorSeconds = FindMoment(anchorSeconds, devOptions.Start.Value);
+            mode = devOptions.IsFrozen
                 ? Mode.Held
-                : Mode.Accelerated;
+                : Mode.Anchored;
         }
     }
 
@@ -63,7 +62,7 @@ internal sealed class SyncedClock {
             switch (mode) {
                 case Mode.Held:
                     return anchorSeconds;
-                case Mode.Accelerated:
+                case Mode.Anchored:
                     return anchorSeconds + (Time.realtimeSinceStartupAsDouble - anchorRealtime) * speed;
                 default:
                     return WallSeconds();

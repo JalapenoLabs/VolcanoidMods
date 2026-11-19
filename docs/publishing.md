@@ -28,7 +28,9 @@ Everything on the page comes from the mod's folder:
 `scripts/mods.py validate` checks the sizes, that the cover is square, and that the changelog has the version's
 line. Day/Night Cycle's cover is a showcase capture (`docs/building.md`) of a fully built drillship under the full
 moon, cropped square, with the title centred in the brand's Noto Sans Black (150 pt at 1024 px, white, soft shadow)
-under a letter-spaced Noto Sans Bold eyebrow (40 pt, `#9BCB3C`).
+under a letter-spaced Noto Sans Bold eyebrow (40 pt, `#9BCB3C`). Rain & Thunderstorms' cover matches it: a showcase
+capture of a lightning bolt striking a fully built drillship, with the title across the sky at the top (120 and 104 pt,
+eyebrow 36 pt) so the drillship and the bolt stay clear.
 
 ## How uploads work
 
