@@ -173,14 +173,15 @@ def has_local_sdk() -> bool:
 def run_dotnet(arguments: list[str], volcanoids_dir: Path | None) -> None:
     """Run a dotnet command from the repo root, locally or in the pinned SDK container.
 
-    Paths in arguments must be relative to the repo root, so they mean the same thing in both places.
+    Paths in arguments must be relative to the repo root, so they mean the same thing in both places. Its output is
+    diagnostics, so it goes to stderr, leaving stdout to commands that print results (workshop.py prints JSON).
     """
     if has_local_sdk():
         command = ["dotnet", *arguments]
         if volcanoids_dir:
             command.append(f"-p:VOLCANOIDS_DIR={volcanoids_dir}")
         logger.info(f"[dotnet] {' '.join(command)}")
-        subprocess.run(command, cwd=REPO_ROOT, check=True)
+        subprocess.run(command, cwd=REPO_ROOT, check=True, stdout=sys.stderr)
         return
 
     if sys.platform == "win32":
@@ -207,7 +208,7 @@ def run_dotnet(arguments: list[str], volcanoids_dir: Path | None) -> None:
         dotnet_arguments.append("-p:VOLCANOIDS_DIR=/volcanoids")
     command += [DOTNET_IMAGE, "dotnet", *dotnet_arguments]
     logger.info(f"[dotnet] (in {DOTNET_IMAGE}) dotnet {' '.join(dotnet_arguments)}")
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, stdout=sys.stderr)
 
 
 # ========================================================================================
@@ -364,9 +365,11 @@ def command_package(arguments: argparse.Namespace) -> None:
 
 
 def command_enable(arguments: argparse.Namespace, enabled: bool) -> None:
-    """Add a local mod to, or remove it from, the game's active mod list (mods.json).
+    """Add a mod to, or remove it from, the game's active mod list (mods.json).
 
-    The in-game Mods menu does the same thing; this exists for unattended test runs.
+    Enabling turns on one copy of the mod: the hand-installed one in LocalMods/, or with --workshop the Steam
+    Workshop item. Either way the other copy's entry is dropped, so the game never loads the mod twice. Disabling
+    drops both. The in-game Mods menu does the same thing; this exists for unattended runs.
     """
     if is_game_running():
         raise SystemExit("Volcanoids is running and rewrites mods.json when it applies mods. Close it first.")
@@ -375,9 +378,26 @@ def command_enable(arguments: argparse.Namespace, enabled: bool) -> None:
     config_path = data_dir / "mods.json"
     config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {"m_mods": []}
     local_dir = f"/{shipped_name(arguments.mod)}"
-    others = [entry for entry in config.get("m_mods", []) if entry.get("LocalDir") != local_dir]
+    item_id = read_workshop_item_id(arguments.mod)
+    mod_ids = {(0, local_dir)}
+    if item_id:
+        mod_ids.add((int(item_id), ""))
+    others = [
+        entry for entry in config.get("m_mods", [])
+        if (entry.get("Id", 0), entry.get("LocalDir") or "") not in mod_ids
+    ]
 
-    if enabled:
+    if enabled and arguments.workshop:
+        if not item_id:
+            raise SystemExit(f"{arguments.mod} has no Workshop item yet ({WORKSHOP_ITEM_ID_PATH}).")
+        others.append({
+            "Id": int(item_id),
+            "LocalDir": "",
+            "Version": 0,
+            "RequiredOnClients": False,
+            "Title": load_manifest(arguments.mod)["Title"],
+        })
+    elif enabled:
         if not (data_dir / "LocalMods" / shipped_name(arguments.mod)).is_dir():
             raise SystemExit(f"{arguments.mod} is not installed. Run: scripts/mods.py install {arguments.mod}")
         others.append({
@@ -389,7 +409,8 @@ def command_enable(arguments: argparse.Namespace, enabled: bool) -> None:
         })
     config["m_mods"] = others
     config_path.write_text(json.dumps(config, indent=4), encoding="utf-8")
-    logger.info(f"[{'enable' if enabled else 'disable'}] {config_path}: {[entry['LocalDir'] for entry in others]}")
+    active = [entry["LocalDir"] or entry["Id"] for entry in others]
+    logger.info(f"[{'enable' if enabled else 'disable'}] {config_path}: {active}")
 
 
 def is_game_running() -> bool:
@@ -424,12 +445,18 @@ def main() -> None:
     for name, handler, summary in (
         ("install", command_install, "build and copy a mod into the game's LocalMods/"),
         ("package", command_package, "build and zip a mod's shipped folder into dist/"),
-        ("enable", lambda parsed: command_enable(parsed, enabled=True), "add an installed mod to mods.json"),
-        ("disable", lambda parsed: command_enable(parsed, enabled=False), "remove a mod from mods.json"),
+        ("enable", lambda parsed: command_enable(parsed, enabled=True), "turn a mod on in mods.json"),
+        ("disable", lambda parsed: command_enable(parsed, enabled=False), "turn a mod off in mods.json"),
     ):
         subcommand = commands.add_parser(name, help=summary)
         subcommand.add_argument("mod")
-        subcommand.set_defaults(handler=handler)
+        if name == "enable":
+            subcommand.add_argument(
+                "--workshop",
+                action="store_true",
+                help="use the subscribed Steam Workshop copy instead of the one in LocalMods/",
+            )
+        subcommand.set_defaults(handler=handler, workshop=False)
 
     parsed = parser.parse_args()
     try:

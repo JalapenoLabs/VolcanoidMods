@@ -2,18 +2,24 @@
 """Boot Volcanoids with a mod's developer capture, then report its log and screenshots.
 
 Linux only. The game runs straight from its install (not through Steam), loads a save, lets the mod photograph the
-requested times of day, and quits. On Hyprland it opens on the hidden special:agent workspace, so it never takes
-over the screen.
+requested times of day, and quits. On Hyprland it opens on the hidden special:agent workspace with its sound sent to
+a null sink, so it neither takes over the screen nor makes noise.
 
-The user's saves and settings are backed up before the run and put back after it, so an autosave during the test
-can never replace a real one. Usage:
+The game never touches the player's own data folder. Unity keeps its data under $XDG_CONFIG_HOME on Linux, so each
+run points that at a sandbox in dist/smoke/<time>/ holding copies of the player's settings, the save under test and
+the mod. This matters beyond tidiness: Volcanoids syncs its data folder through Steam Cloud whenever a process runs
+as the game, so a test that wrote there (even temporarily) could push its autosaves into the player's cloud.
 
     scripts/smoke_test.py day-night-cycle --save Slot02 --shots "15,29,31,40@0.5,40@0"
+    scripts/smoke_test.py day-night-cycle --save-file spot.sav --shots "40@0.5"     # a save from anywhere
+    scripts/smoke_test.py day-night-cycle --save Slot02 --shots "40" --workshop     # the subscribed Workshop copy
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import logging
 import os
 import re
@@ -30,7 +36,16 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from mods import is_game_running, read_settings, require_path  # noqa: E402
+from mods import (  # noqa: E402
+    assemble,
+    is_game_running,
+    load_manifest,
+    read_settings,
+    read_workshop_item_id,
+    require_path,
+    resolve_mods,
+    shipped_name,
+)
 
 STEAM_APP_ID = "951440"
 SILENT_SINK = "volcanoid_mods_smoke_test"
@@ -39,37 +54,62 @@ LOG_PREFIX = "[DayNightCycle]"
 # The load-time scene report ("probe DC (0.186, ...") and every capture ("baseline ambient 0.186").
 BASELINE_PATTERN = re.compile(r"(?:probe DC \(|baseline ambient )(-?[0-9.]+)")
 
-# Everything the game might write during a session that belongs to the player. Unity rotates Player.log into
-# Player-prev.log at startup even when -logFile sends this run's log elsewhere, so both logs are kept too.
-PROTECTED_ENTRIES = ("Saves", "options.json", "prefs", "Player.log", "Player-prev.log")
+# The player's settings, copied into the sandbox so the test renders with their graphics options.
+SETTINGS_FILES = ("options.json", "prefs")
 
 
-def back_up(data_dir: Path, backup_dir: Path) -> None:
-    backup_dir.mkdir(parents=True)
-    for name in PROTECTED_ENTRIES:
-        source = data_dir / name
-        if source.is_dir():
-            shutil.copytree(source, backup_dir / name)
-        elif source.is_file():
-            shutil.copy2(source, backup_dir / name)
-    logger.info(f"[backup] Saved {', '.join(PROTECTED_ENTRIES)} to {backup_dir}")
+# ========================================================================================
+# The sandbox
+# ========================================================================================
 
 
-def restore(data_dir: Path, backup_dir: Path) -> None:
-    for name in PROTECTED_ENTRIES:
-        saved = backup_dir / name
-        target = data_dir / name
-        if not saved.exists():
-            continue
-        if target.is_dir():
-            shutil.rmtree(target)
-        elif target.exists():
-            target.unlink()
-        if saved.is_dir():
-            shutil.copytree(saved, target)
-        else:
-            shutil.copy2(saved, target)
-    logger.info(f"[backup] Restored {', '.join(PROTECTED_ENTRIES)} from {backup_dir}")
+def build_sandbox(run_dir: Path, data_dir: Path, mod: str, save: Path, use_workshop: bool) -> Path:
+    """Lay out a private data folder for the test game and return its XDG_CONFIG_HOME.
+
+    The game's data folder is <XDG_CONFIG_HOME>/unity3d/<company>/<product>; the same company/product path as the
+    player's folder is kept, so the game finds it.
+    """
+    config_home = run_dir / "config"
+    sandbox = config_home / data_dir.relative_to(data_dir.parents[2])
+    (sandbox / "Saves").mkdir(parents=True)
+    for name in SETTINGS_FILES:
+        if (data_dir / name).is_file():
+            shutil.copy2(data_dir / name, sandbox / name)
+    shutil.copy2(save, sandbox / "Saves" / save.name)
+
+    title = load_manifest(mod)["Title"]
+    if use_workshop:
+        item_id = read_workshop_item_id(mod)
+        if not item_id:
+            raise SystemExit(f"{mod} has no Workshop item to test.")
+        entry = {"Id": int(item_id), "LocalDir": "", "Version": 0, "RequiredOnClients": False, "Title": title}
+    else:
+        shipped_dir = assemble(mod)
+        shutil.copytree(shipped_dir, sandbox / "LocalMods" / shipped_dir.name)
+        local_dir = f"/{shipped_name(mod)}"
+        entry = {"Id": 0, "LocalDir": local_dir, "Version": 0, "RequiredOnClients": False, "Title": title}
+    (sandbox / "mods.json").write_text(json.dumps({"m_mods": [entry]}, indent=4), encoding="utf-8")
+    logger.info(f"[sandbox] {sandbox}: {'Workshop' if use_workshop else 'local'} copy of {mod}, save {save.name}")
+    return config_home
+
+
+def fingerprint(data_dir: Path) -> str:
+    """A hash over every file's path, size and modification time in the player's data folder.
+
+    Compared before and after a run, it proves the test left the player's files alone. Steam Cloud can still change
+    them on its own (downloading saves made on another machine), so a change is reported, not undone.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(data_dir.rglob("*")):
+        if path.is_file():
+            stat = path.stat()
+            digest.update(f"{path.relative_to(data_dir)}|{stat.st_size}|{stat.st_mtime_ns}\n".encode())
+    return digest.hexdigest()
+
+
+# ========================================================================================
+# Running the game
+# ========================================================================================
 
 
 def open_silent_sink() -> str | None:
@@ -94,15 +134,22 @@ def close_silent_sink(module_id: str | None) -> None:
         logger.info("[audio] Removed the silent sink")
 
 
-def launch(game_binary: Path, game_arguments: list[str], run_dir: Path, is_silent: bool) -> None:
+def launch(game_binary: Path, game_arguments: list[str], run_dir: Path, config_home: Path, is_silent: bool) -> None:
     """Start the game detached, on Hyprland's hidden special:agent workspace when available."""
     launcher = run_dir / "launch.sh"
+    exports = {
+        # Setting the app ID stops the Steam API relaunching the game through the Steam client.
+        "SteamAppId": STEAM_APP_ID,
+        "SteamGameId": STEAM_APP_ID,
+        "XDG_CONFIG_HOME": str(config_home),
+    }
+    if is_silent:
+        exports["PULSE_SINK"] = SILENT_SINK
+    export_lines = "".join(f"export {name}={shlex.quote(value)}\n" for name, value in exports.items())
     launcher.write_text(
         "#!/usr/bin/env bash\n"
         f"cd {shlex.quote(str(game_binary.parent))}\n"
-        # Setting the app ID stops the Steam API relaunching the game through the Steam client.
-        f"export SteamAppId={STEAM_APP_ID} SteamGameId={STEAM_APP_ID}\n"
-        + (f"export PULSE_SINK={SILENT_SINK}\n" if is_silent else "")
+        + export_lines
         + f"exec {shlex.quote(str(game_binary))} {' '.join(shlex.quote(argument) for argument in game_arguments)}\n",
         encoding="utf-8",
     )
@@ -134,11 +181,7 @@ def wait_for_exit(timeout_seconds: float) -> bool:
 
 
 def stop_game() -> None:
-    """Stop the game and wait until it has fully exited.
-
-    Unity writes prefs while shutting down, so restoring the player's files before the process is gone lets the
-    dying game overwrite them.
-    """
+    """Stop the game, escalating to SIGKILL, and wait until it has fully exited."""
     for signal_name, grace_seconds in (("TERM", 30), ("KILL", 10)):
         subprocess.run(["pkill", f"-{signal_name}", "-f", GAME_PROCESS_PATTERN])
         deadline = time.monotonic() + grace_seconds
@@ -147,7 +190,12 @@ def stop_game() -> None:
         if not is_game_running():
             return
         logger.warning(f"[launch] The game outlived SIG{signal_name} for {grace_seconds}s")
-    logger.error("[launch] The game would not exit; if it writes on its way out, compare the files with the backup")
+    logger.error("[launch] The game would not exit; stop it by hand")
+
+
+# ========================================================================================
+# Report
+# ========================================================================================
 
 
 def report(log_path: Path, capture_dir: Path) -> None:
@@ -185,17 +233,20 @@ def check_lighting_baseline(lines: list[str]) -> None:
     logger.info(f"[report] The game's ambient light held at {baselines[0]} across {len(baselines)} captures")
 
 
+# ####################### #
+#           CLI           #
+# ####################### #
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("mod", help="mod folder under mods/, already installed and enabled")
-    parser.add_argument("--save", required=True, help="save slot to load, e.g. Slot02")
-    parser.add_argument(
-        "--save-file",
-        type=Path,
-        help="load this .sav from elsewhere, copied in as --save for the run only (a new slot name)",
-    )
+    parser.add_argument("mod", help="mod folder under mods/")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--save", help="one of the player's save slots to copy in, e.g. Slot02")
+    source.add_argument("--save-file", type=Path, help="a .sav from anywhere, for shots from a fixed spot")
     parser.add_argument("--shots", required=True, help='minutes since sunrise, e.g. "15,30,40@0.5"')
+    parser.add_argument("--workshop", action="store_true", help="test the subscribed Workshop copy, not a fresh build")
     parser.add_argument("--timeout", type=float, default=300, help="seconds before the game is killed")
     parser.add_argument(
         "--game-args",
@@ -203,51 +254,49 @@ def main() -> None:
         help='extra arguments for the game, e.g. "-daynight-at 15" to hold noon from the first frame',
     )
     parsed = parser.parse_args()
+    resolve_mods([parsed.mod], use_all=False)
 
     if is_game_running():
         raise SystemExit("Volcanoids is already running. Close it first.")
     settings = read_settings()
     game_dir = require_path(settings, "VOLCANOIDS_DIR")
     data_dir = require_path(settings, "VOLCANOIDS_DATA_DIR")
-    slot_path = data_dir / "Saves" / f"{parsed.save}.sav"
-    if parsed.save_file:
-        if not parsed.save_file.is_file():
-            raise SystemExit(f"--save-file {parsed.save_file} does not exist")
-        if slot_path.exists():
-            raise SystemExit(f"{parsed.save} is a real save; give --save-file a slot name that is not taken")
-    elif not slot_path.is_file():
-        raise SystemExit(f"No save named {parsed.save} in {data_dir / 'Saves'}")
+    save = parsed.save_file or data_dir / "Saves" / f"{parsed.save}.sav"
+    if not save.is_file():
+        raise SystemExit(f"No save at {save}")
 
     run_dir = REPO_ROOT / "dist" / "smoke" / datetime.now().strftime("%Y%m%d-%H%M%S")
     capture_dir = run_dir / "captures"
-    log_path = run_dir / "Player.log"
     run_dir.mkdir(parents=True)
-    back_up(data_dir, run_dir / "backup")
-    if parsed.save_file:
-        # Copied in after the backup, so restoring the Saves folder afterwards removes it again.
-        shutil.copy2(parsed.save_file, slot_path)
+    config_home = build_sandbox(run_dir, data_dir, parsed.mod, save, parsed.workshop)
+    sandbox = config_home / data_dir.relative_to(data_dir.parents[2])
+    player_files_before = fingerprint(data_dir)
 
     game_arguments = [
         # Steam starts the Linux build on OpenGL Core; match it so the test renders what players see.
         "-force-glcore",
-        "+load", parsed.save,
-        # The save's mod list does not include the mod under test; without this the game would restart to match it.
+        "+load", save.stem,
+        # The save's own mod list may differ from the sandbox's; without this the game would restart to match it.
         "-mods_resolved",
-        "-logFile", str(log_path),
         "-daynight-capture", str(capture_dir),
         "-daynight-shots", parsed.shots,
         *shlex.split(parsed.game_args),
     ]
     sink_module = open_silent_sink()
     try:
-        launch(game_dir / "Volcanoids.x86_64", game_arguments, run_dir, is_silent=sink_module is not None)
+        launch(game_dir / "Volcanoids.x86_64", game_arguments, run_dir, config_home, sink_module is not None)
         if not wait_for_exit(parsed.timeout):
             logger.warning(f"[launch] Still running after {parsed.timeout:.0f}s; stopping it")
             stop_game()
     finally:
         close_silent_sink(sink_module)
-        restore(data_dir, run_dir / "backup")
-    report(log_path, capture_dir)
+
+    if fingerprint(data_dir) != player_files_before:
+        logger.warning(f"[sandbox] Files in {data_dir} changed during the run. The test game writes only to the "
+                       "sandbox, so this was most likely Steam Cloud syncing; check before trusting the folder.")
+    else:
+        logger.info(f"[sandbox] {data_dir} was untouched")
+    report(sandbox / "Player.log", capture_dir)
 
 
 if __name__ == "__main__":

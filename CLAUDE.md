@@ -64,10 +64,13 @@ docs/                  one document per area of decisions
 
 - The user plays on this machine. Never launch the game, or write into `mods.json` or the game's data folder, while it
   is running. `scripts/mods.py enable` and `smoke_test.py` refuse to.
-- `scripts/smoke_test.py` is the way to check a change in-game: it backs up and restores the player's saves,
-  settings and logs, launches on Hyprland's hidden `special:agent` workspace with sound sent to a null sink, and
+- `scripts/smoke_test.py` is the way to check a change in-game: it runs the game in a sandboxed data folder
+  (`XDG_CONFIG_HOME`), launches on Hyprland's hidden `special:agent` workspace with sound sent to a null sink, and
   collects the mod's log lines and screenshots in `dist/smoke/`. Visual judgement and gameplay feel are the user's
   playtest.
+- **Never let a test game or tool write into the player's data folder.** Volcanoids syncs it through Steam Cloud
+  whenever any process runs as the game (the test game, and the Workshop uploader too), so even a temporary file can
+  land in the player's cloud and come back later.
 - A save that lists a local mod cannot be hosted, so multiplayer hosting is tested with an unlisted Workshop upload.
 
 ## Adding a new mod
