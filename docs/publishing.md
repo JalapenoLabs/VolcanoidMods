@@ -26,8 +26,9 @@ Everything on the page comes from the mod's folder:
 | Item ID | `Workshop/item-id`, written after the first upload |
 
 `scripts/mods.py validate` checks the sizes, that the cover is square, and that the changelog has the version's
-line. Day/Night Cycle's cover blends a golden-hour and a full-moon capture taken from the same camera, with the title
-in the brand's Noto Sans Black and a green eyebrow.
+line. Day/Night Cycle's cover is a showcase capture (`docs/building.md`) of a fully built drillship under the full
+moon, cropped square, with the title centred in the brand's Noto Sans Black (150 pt at 1024 px, white, soft shadow)
+under a letter-spaced Noto Sans Bold eyebrow (40 pt, `#9BCB3C`).
 
 ## How uploads work
 
