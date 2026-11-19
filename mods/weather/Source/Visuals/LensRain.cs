@@ -35,16 +35,10 @@ internal sealed class LensRain : IDisposable {
     readonly Drop[] drops = new Drop[MaxDrops];
     float spawnBudget;
 
-    /// <summary>For developer logs.</summary>
+    /// <summary>For developer logs: how many drops are on the lens, and whether it is shown.</summary>
     public string Describe() {
         int active = Array.FindAll(drops, drop => drop.IsActive).Length;
-        int first = Array.FindIndex(drops, drop => drop.IsActive);
-        string sample = first >= 0
-            ? $" first at {images[first].rectTransform.anchoredPosition} size {images[first].rectTransform.sizeDelta} "
-                + $"colour {images[first].color} scale {images[first].rectTransform.lossyScale}"
-            : "";
-        return $"lens: {active} drops, canvas {(canvas.enabled ? "on" : "off")} on {Screen.width}x{Screen.height}"
-            + $" ({canvas.renderMode}, order {canvas.sortingOrder}){sample}";
+        return $"lens: {active} drops, {(canvas.enabled ? "shown" : "hidden")}";
     }
 
     StormRandom random = new StormRandom(0x1E25_D20FUL);

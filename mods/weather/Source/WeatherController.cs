@@ -35,6 +35,7 @@ internal sealed class WeatherController : MonoBehaviour {
     static readonly int CloudCoverId = Shader.PropertyToID("_JalapenoLabs_CloudCover");
 
     readonly PlayerLocation location = new PlayerLocation();
+    readonly DrillshipExteriors drillshipExteriors = new DrillshipExteriors();
     readonly List<IDisposable> parts = new List<IDisposable>();
 
     SyncedClock clock;
@@ -52,6 +53,7 @@ internal sealed class WeatherController : MonoBehaviour {
     Puddles puddles;
     LensRain lensRain;
     WetSurfaces wetSurfaces;
+    HullRain hullRain;
     StormSea sea;
     LavaSteam steam;
     bool hasStartedVisuals;
@@ -69,7 +71,7 @@ internal sealed class WeatherController : MonoBehaviour {
     /// </summary>
     public Vector3? EyeOverride { get; set; }
 
-    /// <summary>Developer captures set this to photograph the raindrops on the lens, which follow the hidden HUD.</summary>
+    /// <summary>Developer captures set this to photograph the lens drops, which follow the hidden HUD.</summary>
     public bool IsLensRainForced { get; set; }
 
     public static WeatherController Create(Scene gameScene, SyncedClock clock, DevOptions devOptions) {
@@ -140,7 +142,8 @@ internal sealed class WeatherController : MonoBehaviour {
         List<LavaPool> lavaPools = LavaPools.FindOnSurface();
         puddles = Own(Start(() => new Puddles(transform, textures, lavaPools)));
         lensRain = Own(Start(() => new LensRain(transform, textures)));
-        wetSurfaces = Own(Start(() => new WetSurfaces(transform, textures)));
+        wetSurfaces = Own(Start(() => new WetSurfaces(drillshipExteriors)));
+        hullRain = Own(Start(() => new HullRain(transform, textures, drillshipExteriors)));
         steam = Own(Start(() => new LavaSteam(gameObject.scene, textures, lavaPools)));
         hasStartedVisuals = true;
     }
@@ -171,7 +174,9 @@ internal sealed class WeatherController : MonoBehaviour {
                 Time.unscaledDeltaTime,
                 IsLensRainForced
             );
-            wetSurfaces?.Update(weather.Wetness, weather.Rain * surface, eye, Time.deltaTime);
+            drillshipExteriors.Update();
+            wetSurfaces?.Update(weather.Wetness);
+            hullRain?.Update(weather.Rain * surface, eye, Time.deltaTime);
             steam?.Update(weather.Rain, wind, eye, surface);
         }
         // The sea answers the storm's wind, not the player's whereabouts: it is the same sea underground or not.
@@ -235,10 +240,11 @@ internal sealed class WeatherController : MonoBehaviour {
     /// </summary>
     public void LogBaseline(string when) {
         float baseline = RenderSettings.ambientProbe[0, 0];
-        string puddleReport = puddles != null ? $", {puddles.Describe()}" : "";
-        puddleReport += lensRain != null ? $", {lensRain.Describe()}" : "";
+        string partsReport = puddles != null ? $", {puddles.Describe()}" : "";
+        partsReport += hullRain != null ? $", {hullRain.Describe()}" : "";
+        partsReport += lensRain != null ? $", {lensRain.Describe()}" : "";
         Debug.Log($"{WeatherMod.LogPrefix}Storm {when}: {weather.Storm.Kind}, cover {weather.Cover:0.00}, "
-            + $"rain {weather.Rain:0.00}, wetness {weather.Wetness:0.00}{puddleReport}, "
+            + $"rain {weather.Rain:0.00}, wetness {weather.Wetness:0.00}{partsReport}, "
             + $"baseline ambient {baseline:0.000}");
     }
 

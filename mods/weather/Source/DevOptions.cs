@@ -19,7 +19,7 @@ namespace JalapenoLabs.Weather;
 ///   -weather-speed 10           run the weather 10 times faster (with -weather-at, starting from that moment)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
-///   -weather-views LIST         views to capture (island, sky, drillship, hull, lens, player); default all
+///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player); default all
 ///                               (lens: the island view with the raindrops on the lens shown, though the HUD is off)
 ///   -weather-dump-sounds DIR    write every synthesised sound as a WAV file into DIR
 ///   -weather-survey             log the game's particle materials, water and lava, for building the storm's effects
@@ -55,7 +55,7 @@ internal sealed class DevOptions {
         [StormKind.Thunderstorm] = "thunder",
     };
 
-    static readonly string[] AllViews = { "island", "sky", "drillship", "hull", "lens", "player" };
+    static readonly string[] AllViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player" };
 
     public readonly Moment? Hold;
     public readonly double Speed;

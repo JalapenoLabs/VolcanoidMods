@@ -43,9 +43,9 @@ internal sealed class NightController : MonoBehaviour {
     static readonly int SurfaceZoneMask = Layers.GetMask(Layers.MainZone);
 
     /// <summary>
-    /// Cloud cover a weather mod (such as Jalapeno Labs' Rain &amp; Thunderstorms) may publish, 0 clear to 1 overcast, as
-    /// a global shader value. It is the only link between the night and a weather mod, so neither needs the other;
-    /// unset, it reads 0.
+    /// Cloud cover a weather mod (such as Jalapeno Labs' Rain &amp; Thunderstorms) may publish, 0 clear to 1
+    /// overcast, as a global shader value. It is the only link between the night and a weather mod, so neither needs
+    /// the other; unset, it reads 0.
     /// </summary>
     static readonly int CloudCoverId = Shader.PropertyToID("_JalapenoLabs_CloudCover");
 

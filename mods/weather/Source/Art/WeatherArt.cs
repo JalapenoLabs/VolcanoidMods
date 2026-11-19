@@ -146,20 +146,63 @@ public static class WeatherArt {
         return image;
     }
 
-    /// <summary>A splash: a little crown of spray, bright at its rim, sprayed droplets around it.</summary>
-    public static ArtImage Splash(ulong seed, int size = 64) {
+    /// <summary>
+    /// A splash seen from the side, as the upright splash particles show it: a crown of water thrown up from where the
+    /// drop struck, a thin sheet at its foot breaking into jets, some ending in a droplet, over a bright skirt.
+    ///
+    /// The point of impact is the image's centre and the splash rises into its upper half, leaving the lower half
+    /// empty: a particle is centred on where it lands, so this way the splash stands on the surface instead of being
+    /// half buried in it.
+    /// </summary>
+    public static ArtImage Splash(ulong seed, int size = 128) {
+        const int JetCount = 9;
+        const float JetWidth = 0.028f;
+        const float DropletRadius = 0.035f;
+        // The crown opens upward like a cup: its jets lean out at most this far from upright, in radians.
+        const float CrownSpread = 0.75f;
+        var directionsX = new float[JetCount];
+        var directionsY = new float[JetCount];
+        var lengths = new float[JetCount];
+        var hasDroplet = new bool[JetCount];
+        for (int jet = 0; jet < JetCount; jet++) {
+            float slot = (jet + 0.15f + 0.7f * Noise.Value(seed, jet * 3.1f + 0.5f, 0.5f)) / JetCount;
+            float lean = (slot * 2 - 1) * CrownSpread;
+            directionsX[jet] = (float)Math.Sin(lean);
+            directionsY[jet] = (float)Math.Cos(lean);
+            lengths[jet] = 0.4f + 0.55f * Noise.Value(seed + 1, jet * 3.1f + 0.5f, 0.5f);
+            hasDroplet[jet] = Noise.Value(seed + 2, jet * 3.1f + 0.5f, 0.5f) > 0.4f;
+        }
+
         var image = new ArtImage(size, size);
-        for (int y = 0; y < size; y++) {
+        for (int y = size / 2; y < size; y++) {
             for (int x = 0; x < size; x++) {
                 float u = (x + 0.5f) / size * 2 - 1;
                 float v = (y + 0.5f) / size * 2 - 1;
-                float radius = (float)Math.Sqrt(u * u + v * v);
-                float angle = (float)Math.Atan2(v, u);
-                float crown = (float)Math.Exp(-Math.Pow((radius - 0.55f) / 0.12f, 2));
-                float spikes = 0.5f + 0.5f * (float)Math.Cos(angle * 9 + Noise.Value(seed, u * 4, v * 4) * 3);
-                float droplets = Noise.Value(seed + 1, u * 11, v * 11) > 0.83f && radius < 0.95f ? 0.8f : 0;
-                float alpha = Math.Min(1, crown * (0.4f + 0.6f * spikes) + droplets * (1 - radius));
-                image.Set(x, y, 1, 1, 1, alpha);
+                // The skirt of water at the foot, and the thin cup of the crown's wall rising from it.
+                float alpha = (float)Math.Exp(-(u * u / 0.06f + v * v / 0.003f));
+                float wallEdge = 0.06f + v * (float)Math.Tan(CrownSpread);
+                if (v < 0.3f && Math.Abs(u) < wallEdge) {
+                    alpha = Math.Max(alpha, 0.35f * (1 - v / 0.3f) * (0.5f + 0.5f * Math.Abs(u) / wallEdge));
+                }
+                for (int jet = 0; jet < JetCount; jet++) {
+                    float along = u * directionsX[jet] + v * directionsY[jet];
+                    float across = Math.Abs(u * directionsY[jet] - v * directionsX[jet]);
+                    float length = lengths[jet];
+                    if (along > 0 && along < length) {
+                        // Thick and bright at the foot, thinning out towards the tip.
+                        float thinning = 1 - along / length;
+                        float width = JetWidth * (0.4f + 0.6f * thinning);
+                        float core = (float)Math.Exp(-Math.Pow(across / width, 2));
+                        alpha = Math.Max(alpha, core * (0.25f + 0.65f * thinning));
+                    }
+                    if (hasDroplet[jet]) {
+                        float tipX = u - directionsX[jet] * (length + DropletRadius * 2);
+                        float tipY = v - directionsY[jet] * (length + DropletRadius * 2);
+                        float droplet = (float)Math.Exp(-(tipX * tipX + tipY * tipY) / (DropletRadius * DropletRadius));
+                        alpha = Math.Max(alpha, droplet * 0.75f);
+                    }
+                }
+                image.Set(x, y, 1, 1, 1, Math.Min(1, alpha));
             }
         }
         return image;

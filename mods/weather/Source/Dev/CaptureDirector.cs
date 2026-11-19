@@ -58,6 +58,12 @@ internal sealed class CaptureDirector : MonoBehaviour {
     const float HullViewDistance = 16;
     const float HullViewHeight = 2.2f;
 
+    /// <summary>
+    /// The deck view stands farther off and higher, to see the rain on the roofs and the ground before it.
+    /// </summary>
+    const float DeckViewDistance = 34;
+    const float DeckViewHeight = 9;
+
     WeatherController controller;
     DevOptions devOptions;
     Camera screenCamera;
@@ -221,7 +227,18 @@ internal sealed class CaptureDirector : MonoBehaviour {
                     views.Add(new View(name, () => LookTowardsVolcano(focus), IslandViewFieldOfView));
                     break;
                 case "hull":
-                    views.Add(new View(name, () => CloseToHull(showcase, playerPosition), HullViewFieldOfView));
+                    views.Add(new View(
+                        name,
+                        () => NearHull(showcase, playerPosition, HullViewDistance, HullViewHeight, 3),
+                        HullViewFieldOfView
+                    ));
+                    break;
+                case "deck":
+                    views.Add(new View(
+                        name,
+                        () => NearHull(showcase, playerPosition, DeckViewDistance, DeckViewHeight, 6),
+                        HullViewFieldOfView
+                    ));
                     break;
                 default:
                     views.Add(new View(name, () => null, null));
@@ -274,10 +291,13 @@ internal sealed class CaptureDirector : MonoBehaviour {
     }
 
     /// <summary>
-    /// Standing on the ground close to a drillship (the showcase, or the one nearest the player), on its most open
-    /// side, looking at its hull: where rain splashes off it, water pours from its edges and puddles gather around it.
+    /// Standing near a drillship (the showcase, or the one nearest the player), on its most open side, looking at its
+    /// hull: where rain splashes off it, water pours from its edges and puddles gather around it.
     /// </summary>
-    static Pose? CloseToHull(Train showcase, Vector3 playerPosition) {
+    /// <param name="distance">How far out from the hull to stand.</param>
+    /// <param name="height">How high above the ground the eye is.</param>
+    /// <param name="aimHeight">How high up the hull to look, above its base.</param>
+    static Pose? NearHull(Train showcase, Vector3 playerPosition, float distance, float height, float aimHeight) {
         Component drillship = showcase != null ? showcase : NearestDrillship(playerPosition);
         if (drillship == null) {
             Debug.LogWarning($"{WeatherMod.LogPrefix}No drillship for the hull view; using the player's view");
@@ -291,7 +311,7 @@ internal sealed class CaptureDirector : MonoBehaviour {
             var outward = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle));
             // From the bounds' edge in that direction, out to the standing spot.
             Vector3 edge = bounds.ClosestPoint(bounds.center + outward * bounds.extents.magnitude * 2);
-            Vector3 spot = edge + outward * HullViewDistance;
+            Vector3 spot = edge + outward * distance;
             bool hasGround = Physics.Raycast(
                 spot + Vector3.up * 200,
                 Vector3.down,
@@ -303,8 +323,8 @@ internal sealed class CaptureDirector : MonoBehaviour {
             if (!hasGround || ground.point.y < 0.5f) {
                 continue;
             }
-            Vector3 eye = ground.point + Vector3.up * HullViewHeight;
-            Vector3 target = new Vector3(edge.x, Mathf.Max(ground.point.y + 3, bounds.min.y + 3), edge.z);
+            Vector3 eye = ground.point + Vector3.up * height;
+            Vector3 target = new Vector3(edge.x, Mathf.Max(ground.point.y, bounds.min.y) + aimHeight, edge.z);
             // Open ground counts for more: a clear line to the hull, and level footing.
             bool isClear = !Physics.Linecast(
                 eye,

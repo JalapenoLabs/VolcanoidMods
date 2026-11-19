@@ -235,6 +235,13 @@ internal sealed class RainFall : IDisposable {
         ParticleSystem.SizeOverLifetimeModule size = spray.sizeOverLifetime;
         size.enabled = true;
         size.size = new ParticleSystem.MinMaxCurve(1, AnimationCurve.Linear(0, 0.6f, 1, 1.4f));
+        // One puff of the cloud atlas each, chosen at random; the whole atlas on one particle is a cluster of puffs.
+        ParticleSystem.TextureSheetAnimationModule sheet = spray.textureSheetAnimation;
+        sheet.enabled = true;
+        sheet.numTilesX = Art.WeatherArt.CloudAtlasTiles;
+        sheet.numTilesY = Art.WeatherArt.CloudAtlasTiles;
+        sheet.frameOverTime = new ParticleSystem.MinMaxCurve(0);
+        sheet.startFrame = new ParticleSystem.MinMaxCurve(0, 0.9999f);
         var renderer = spray.GetComponent<ParticleSystemRenderer>();
         renderer.sharedMaterial = sprayMaterial;
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
