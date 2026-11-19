@@ -19,13 +19,15 @@ Everything on the page comes from the mod's folder:
 | --- | --- |
 | Title | `Content/.manifest.json` `Title` |
 | Tags | `Mod`, the multiplayer tag (`Client` for ClientOnly), then the manifest's `Tags`: what the game's own uploader sends |
-| Preview image | `Content/.thumb.jpg` (or `.png`), at most 1 MB; the game's Mods menu shows it too |
+| Cover | `Content/.thumb.jpg` (or `.png`): square, at least 512 x 512 (1024 x 1024 is crisp), at most 1 MB. The page shows it at 268 x 268 and the game's Mods menu shows it too, so the title must read at that size |
 | Description | `Workshop/description.txt`, Steam BBCode, at most 8,000 characters, ending with the GitHub and Patreon links |
 | Screenshots | `Workshop/screenshots/*.jpg`, at most 1 MB each, shown in file-name order |
 | Change note | The `Changelog.txt` line for the manifest's `Version` |
 | Item ID | `Workshop/item-id`, written after the first upload |
 
-`scripts/mods.py validate` checks the sizes and that the changelog has the version's line.
+`scripts/mods.py validate` checks the sizes, that the cover is square, and that the changelog has the version's
+line. Day/Night Cycle's cover blends a golden-hour and a full-moon capture taken from the same camera, with the title
+in the brand's Noto Sans Black and a green eyebrow.
 
 ## How uploads work
 
@@ -35,8 +37,19 @@ the upload belongs to the signed-in account. The account shows as playing Volcan
 
 It makes the same calls as the game's uploader (`WorkshopUpload` in `Volcanoids.dll`), and also sends what the
 in-game button leaves out: the description, a real change note (the game always sends "Generic update"), and
-screenshots, replacing the previous set on each update. An update keeps the item's visibility unless
-`--visibility` is given, and refuses to touch an item another account owns.
+screenshots. An update keeps the item's visibility unless `--visibility` is given, and refuses to touch an item
+another account owns.
+
+**Screenshots and Steam's image store.** Steam files every image under its content's SHA-1, and removing an image
+deletes that file. Removing the gallery and adding byte-identical images in one update therefore leaves the page
+pointing at deleted files (every image 404s, while Steam reports success). So the uploader compares the gallery's
+hashes with the local screenshots: an unchanged gallery is left alone, and a changed one is cleared in an update of
+its own before the main update adds the new set. `--force-screenshots` re-uploads an unchanged gallery the same way,
+which repairs one whose images Steam lost.
+
+**Every publish ends by fetching the cover and each gallery image** from Steam's image server, retrying for a
+minute while new images are processed. It fails if any image is still broken, because Steam's own success result
+does not mean the page works.
 
 Requirements: the Steam client running and signed in to the account that owns the item, a .NET runtime (9 or newer)
 to run the tool, and Docker or the .NET SDK to build it. The game must be closed.
@@ -55,7 +68,7 @@ to run the tool, and Docker or the .NET SDK to build it. The game must be closed
 2. Commit and push.
 3. `scripts/release.py <mod>`.
 
-To change only the Workshop page (description, screenshots) without a new version, run
+To change only the Workshop page (description, cover, screenshots) without a new version, run
 `scripts/workshop.py publish <mod>`: it uploads the current build with the current page.
 
 ## What `release.py` checks and does
@@ -73,7 +86,7 @@ the Workshop upload is repeated. A tag on a different commit stops it; bump the 
 ## Checking a release
 
 ```shell
-scripts/workshop.py info <mod>        # the live item: title, visibility, tags, size, screenshot count
+scripts/workshop.py info <mod>        # the live item: title, visibility, tags, size, screenshots, broken images
 scripts/workshop.py subscribe <mod>   # subscribe this account and wait for Steam to download it
 ```
 

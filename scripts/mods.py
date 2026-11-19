@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import xml.etree.ElementTree as ElementTree
@@ -53,6 +54,10 @@ REQUIRED_MOD_FILES = (
 THUMBNAIL_NAMES = (".thumb.png", ".thumb.jpg")
 PREVIEW_MAX_BYTES = 1024 * 1024
 SCREENSHOT_SUFFIXES = (".jpg", ".png")
+
+# The Workshop page and the game's Mods menu show the cover in a square, as Volcanoids mods' 512 x 512 covers do; a
+# wide image is letterboxed into a thin strip there.
+COVER_MIN_PIXELS = 512
 
 # Steam's limits for a Workshop item's title and description (k_cchPublishedDocument*Max).
 WORKSHOP_TITLE_MAX_CHARACTERS = 128
@@ -250,6 +255,12 @@ def validate_mod(mod: str) -> list[str]:
         elif image.stat().st_size > PREVIEW_MAX_BYTES:
             problems.append(f"{image.relative_to(mod_dir)} is over the Workshop's 1 MB preview limit")
 
+    for thumbnail in thumbnails:
+        width, height = image_size(thumbnail)
+        if width != height or width < COVER_MIN_PIXELS:
+            problems.append(f"Content/{thumbnail.name} is {width} x {height}; the cover must be square, at least "
+                            f"{COVER_MIN_PIXELS} x {COVER_MIN_PIXELS}")
+
     if (mod_dir / "Content" / WORKSHOP_ID_FILE).exists():
         problems.append(f"Content/{WORKSHOP_ID_FILE} would ship to players; record the ID in {WORKSHOP_ITEM_ID_PATH}")
     item_id = read_workshop_item_id(mod)
@@ -266,6 +277,25 @@ def validate_mod(mod: str) -> list[str]:
     if (mod_dir / "Content" / ".manifest.json").is_file():
         problems += validate_manifest(mod)
     return problems
+
+
+def image_size(path: Path) -> tuple[int, int]:
+    """Width and height of a PNG or JPEG, read from its header (no imaging library needed)."""
+    data = path.read_bytes()
+    if data.startswith(b"\x89PNG"):
+        return struct.unpack(">II", data[16:24])
+    # JPEG: walk the segments to the frame header (SOF0 to SOF15, except DHT, JPG and DAC), which holds the size.
+    offset = 2
+    while offset + 9 < len(data):
+        if data[offset] != 0xFF:
+            break
+        marker = data[offset + 1]
+        segment_length = struct.unpack(">H", data[offset + 2:offset + 4])[0]
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            height, width = struct.unpack(">HH", data[offset + 5:offset + 9])
+            return width, height
+        offset += 2 + segment_length
+    raise ValueError(f"{path} is not a PNG or JPEG this check can read")
 
 
 def validate_manifest(mod: str) -> list[str]:

@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -62,6 +63,10 @@ MULTIPLAYER_TAGS = {
     3: "SinglePlayer",
 }
 CATEGORY_TAG = "Mod"
+
+# Freshly uploaded images can take a moment to appear on Steam's image server.
+IMAGE_CHECK_ATTEMPTS = 6
+IMAGE_CHECK_INTERVAL_SECONDS = 10
 
 
 # ========================================================================================
@@ -112,8 +117,12 @@ def workshop_tags(manifest: dict) -> list[str]:
     return tags
 
 
-def publish(mod: str, visibility: str | None) -> dict:
-    """Build the mod and upload it with its page. Creates the Workshop item on the first upload."""
+def publish(mod: str, visibility: str | None, force_screenshots: bool = False) -> dict:
+    """Build the mod and upload it with its page, then check every image on the live page loads.
+
+    Creates the Workshop item on the first upload. The gallery is re-uploaded only when its screenshots changed,
+    unless force_screenshots is set (to repair a gallery whose images Steam lost).
+    """
     problems = validate_mod(mod)
     if problems:
         raise SystemExit(f"mods/{mod} is not ready to publish: {'; '.join(problems)}")
@@ -149,6 +158,8 @@ def publish(mod: str, visibility: str | None) -> dict:
             arguments += ["--visibility", visibility]
         for screenshot in screenshots:
             arguments += ["--screenshot", str(screenshot)]
+        if force_screenshots:
+            arguments += ["--force-screenshots", "true"]
 
         logger.info(f"[publish] {manifest['Title']} {version}: {len(screenshots)} screenshot(s), "
                     f"tags {workshop_tags(manifest)}")
@@ -160,8 +171,29 @@ def publish(mod: str, visibility: str | None) -> dict:
     if result["needsLegalAgreement"]:
         logger.warning("[publish] Accept the Workshop legal agreement or the item stays hidden: "
                        "https://steamcommunity.com/sharedfiles/workshoplegalagreement")
+    require_working_images(result["itemId"])
     logger.info(f"[publish] Live at {result['url']}")
     return result
+
+
+def require_working_images(item_id: str) -> None:
+    """Fail unless the live page's cover and every gallery image load from Steam's image server.
+
+    Steam reports an update as successful even when it leaves the page pointing at deleted images, so the only proof
+    that the page works is fetching them.
+    """
+    for attempt in range(1, IMAGE_CHECK_ATTEMPTS + 1):
+        details = run_uploader("info", ["--item", item_id])
+        broken = details["brokenImages"]
+        if not broken:
+            logger.info(f"[publish] The cover and all {details['screenshots']} screenshot(s) load")
+            return
+        logger.info(f"[publish] {len(broken)} image(s) not loading yet (check {attempt} of {IMAGE_CHECK_ATTEMPTS})")
+        time.sleep(IMAGE_CHECK_INTERVAL_SECONDS)
+    raise SystemExit(
+        f"Workshop item {item_id} still has broken images: {'; '.join(broken)}. "
+        "Re-upload the gallery with: scripts/workshop.py publish <mod> --force-screenshots"
+    )
 
 
 def require_item_id(mod: str) -> str:
@@ -175,7 +207,7 @@ def require_item_id(mod: str) -> str:
 def command_publish(arguments: argparse.Namespace) -> None:
     if is_game_running():
         raise SystemExit("Close Volcanoids first: Steam would see two copies of the game running.")
-    publish(arguments.mod, arguments.visibility)
+    publish(arguments.mod, arguments.visibility, arguments.force_screenshots)
 
 
 def command_info(arguments: argparse.Namespace) -> None:
@@ -204,6 +236,11 @@ def main() -> None:
         "--visibility",
         choices=["public", "unlisted", "friends", "private"],
         help="required on the first upload; leave out to keep an existing item's visibility",
+    )
+    publish_parser.add_argument(
+        "--force-screenshots",
+        action="store_true",
+        help="re-upload the gallery even if unchanged (repairs images Steam lost)",
     )
     publish_parser.set_defaults(handler=command_publish)
 

@@ -7,6 +7,7 @@
 //   WorkshopUploader publish   --steam-api <lib> [--item <id>] --content <dir> --preview <file> --title <text>
 //                              --description-file <file> --change-note-file <file> --tags <a,b,c>
 //                              [--visibility <public|friends|private|unlisted>] [--screenshot <file>]...
+//                              [--force-screenshots true]
 //
 // The Steam client must be running, and the process needs SteamAppId=951440 in its environment.
 //
@@ -54,6 +55,7 @@ try {
                         $"--visibility must be one of: {string.Join(", ", visibilityByName.Keys)}"
                     ),
             Screenshots = options.All("--screenshot"),
+            ForceScreenshots = options.Optional("--force-screenshots") == "true",
         }),
         _ => throw new ArgumentException($"Unknown command '{command}'"),
     };

@@ -3,6 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Steamworks;
 
 namespace JalapenoLabs.WorkshopUploader;
@@ -20,6 +24,8 @@ internal sealed class PublishRequest {
     /// <summary>Null keeps an existing item's visibility, so a routine update never unhides or hides it.</summary>
     public ERemoteStoragePublishedFileVisibility? Visibility;
     public IReadOnlyList<string> Screenshots;
+    /// <summary>Re-upload the screenshots even when the gallery already holds the same images.</summary>
+    public bool ForceScreenshots;
 }
 
 /// <summary>
@@ -41,7 +47,7 @@ internal sealed class WorkshopItems {
     public Dictionary<string, object> Publish(PublishRequest request) {
         bool isNew = !request.ItemId.HasValue;
         PublishedFileId_t itemId;
-        int oldScreenshotCount = 0;
+        IReadOnlyList<string> galleryHashes = Array.Empty<string>();
         if (isNew) {
             itemId = Create();
         } else {
@@ -53,7 +59,15 @@ internal sealed class WorkshopItems {
                     $"Workshop item {itemId} belongs to another Steam account; sign in to the account that made it"
                 );
             }
-            oldScreenshotCount = details.AdditionalPreviewCount;
+            galleryHashes = details.GalleryImages.Select(image => image.ContentHash).ToList();
+        }
+
+        List<string> screenshotHashes = request.Screenshots.Select(ContentHash).ToList();
+        bool isGalleryChanged = request.ForceScreenshots || !galleryHashes.SequenceEqual(screenshotHashes);
+        if (isGalleryChanged && galleryHashes.Count > 0) {
+            // Steam stores images by content hash. Removing an image and adding identical bytes in the same update
+            // leaves the gallery pointing at the deleted file, so the old images go in an update of their own.
+            ClearGallery(itemId, galleryHashes.Count);
         }
 
         UGCUpdateHandle_t update = SteamUGC.StartItemUpdate(SteamSession.VolcanoidsAppId, itemId);
@@ -65,26 +79,45 @@ internal sealed class WorkshopItems {
         if (request.Visibility.HasValue) {
             Require(SteamUGC.SetItemVisibility(update, request.Visibility.Value), "set the visibility");
         }
+        if (isGalleryChanged) {
+            foreach (string screenshot in request.Screenshots) {
+                Require(
+                    SteamUGC.AddItemPreviewFile(
+                        update,
+                        Path.GetFullPath(screenshot),
+                        EItemPreviewType.k_EItemPreviewType_Image
+                    ),
+                    $"add screenshot {Path.GetFileName(screenshot)}"
+                );
+            }
+        } else {
+            Console.Error.WriteLine("The gallery already holds these screenshots; leaving it as it is");
+        }
 
-        // Replace the screenshots rather than piling new copies on top of the old ones. Indices shift as previews
-        // are removed, so they go from the last down.
-        for (int index = oldScreenshotCount - 1; index >= 0; index--) {
+        SubmitItemUpdateResult_t result = Submit(update, itemId, request.ChangeNote);
+        return new Dictionary<string, object> {
+            ["itemId"] = itemId.m_PublishedFileId.ToString(),
+            ["created"] = isNew,
+            ["galleryReplaced"] = isGalleryChanged,
+            ["needsLegalAgreement"] = result.m_bUserNeedsToAcceptWorkshopLegalAgreement,
+            ["url"] = PageUrl(itemId.m_PublishedFileId),
+        };
+    }
+
+    /// <summary>Removes every gallery image in its own update; indices shift as images go, so last first.</summary>
+    void ClearGallery(PublishedFileId_t itemId, int imageCount) {
+        Console.Error.WriteLine($"Clearing the {imageCount} old gallery image(s) first...");
+        UGCUpdateHandle_t update = SteamUGC.StartItemUpdate(SteamSession.VolcanoidsAppId, itemId);
+        for (int index = imageCount - 1; index >= 0; index--) {
             Require(SteamUGC.RemoveItemPreview(update, (uint)index), $"remove old screenshot {index}");
         }
-        foreach (string screenshot in request.Screenshots) {
-            Require(
-                SteamUGC.AddItemPreviewFile(
-                    update,
-                    Path.GetFullPath(screenshot),
-                    EItemPreviewType.k_EItemPreviewType_Image
-                ),
-                $"add screenshot {Path.GetFileName(screenshot)}"
-            );
-        }
+        Submit(update, itemId, "");
+    }
 
+    SubmitItemUpdateResult_t Submit(UGCUpdateHandle_t update, PublishedFileId_t itemId, string changeNote) {
         Console.Error.WriteLine($"Uploading Workshop item {itemId}...");
         SubmitItemUpdateResult_t result = session.Await<SubmitItemUpdateResult_t>(
-            SteamUGC.SubmitItemUpdate(update, request.ChangeNote),
+            SteamUGC.SubmitItemUpdate(update, changeNote),
             "Submit the update",
             TimeSpan.FromMinutes(10),
             () => ReportProgress(update)
@@ -98,13 +131,13 @@ internal sealed class WorkshopItems {
                 + "https://steamcommunity.com/sharedfiles/workshoplegalagreement"
             );
         }
+        return result;
+    }
 
-        return new Dictionary<string, object> {
-            ["itemId"] = itemId.m_PublishedFileId.ToString(),
-            ["created"] = isNew,
-            ["needsLegalAgreement"] = result.m_bUserNeedsToAcceptWorkshopLegalAgreement,
-            ["url"] = PageUrl(itemId.m_PublishedFileId),
-        };
+    /// <summary>The SHA-1 Steam files an image under: the second-to-last segment of its image URL.</summary>
+    static string ContentHash(string path) {
+        using FileStream stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA1.HashData(stream));
     }
 
     public Dictionary<string, object> Describe(ulong itemId) {
@@ -115,7 +148,8 @@ internal sealed class WorkshopItems {
             ["visibility"] = details.Visibility.ToString(),
             ["tags"] = details.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries),
             ["fileSize"] = details.FileSize,
-            ["screenshots"] = details.AdditionalPreviewCount,
+            ["screenshots"] = details.GalleryImages.Count,
+            ["brokenImages"] = BrokenImages(details),
             ["updated"] = DateTimeOffset.FromUnixTimeSeconds(details.UpdatedUnixSeconds).ToString("u"),
             ["ownedByThisAccount"] = details.Owner == session.AccountId,
             ["descriptionLength"] = details.Description.Length,
@@ -180,9 +214,10 @@ internal sealed class WorkshopItems {
         public readonly CSteamID Owner;
         public readonly int FileSize;
         public readonly uint UpdatedUnixSeconds;
-        public readonly int AdditionalPreviewCount;
+        public readonly string PreviewUrl;
+        public readonly IReadOnlyList<GalleryImage> GalleryImages;
 
-        public ItemDetails(SteamUGCDetails_t details, int additionalPreviewCount) {
+        public ItemDetails(SteamUGCDetails_t details, string previewUrl, IReadOnlyList<GalleryImage> galleryImages) {
             Title = details.m_rgchTitle;
             Description = details.m_rgchDescription;
             Tags = details.m_rgchTags;
@@ -190,7 +225,8 @@ internal sealed class WorkshopItems {
             Owner = new CSteamID(details.m_ulSteamIDOwner);
             FileSize = details.m_nFileSize;
             UpdatedUnixSeconds = details.m_rtimeUpdated;
-            AdditionalPreviewCount = additionalPreviewCount;
+            PreviewUrl = previewUrl;
+            GalleryImages = galleryImages;
         }
     }
 
@@ -212,10 +248,51 @@ internal sealed class WorkshopItems {
             if (details.m_eResult != EResult.k_EResultOK) {
                 throw new InvalidOperationException($"Workshop item {itemId} is unavailable: {details.m_eResult}");
             }
-            return new ItemDetails(details, (int)SteamUGC.GetQueryUGCNumAdditionalPreviews(query, 0));
+            SteamUGC.GetQueryUGCPreviewURL(query, 0, out string previewUrl, 1024);
+            var galleryImages = new List<GalleryImage>();
+            uint imageCount = SteamUGC.GetQueryUGCNumAdditionalPreviews(query, 0);
+            for (uint index = 0; index < imageCount; index++) {
+                SteamUGC.GetQueryUGCAdditionalPreview(
+                    query, 0, index, out string url, 1024, out string _, 260, out EItemPreviewType _
+                );
+                galleryImages.Add(new GalleryImage(url));
+            }
+            return new ItemDetails(details, previewUrl, galleryImages);
         } finally {
             SteamUGC.ReleaseQueryUGCRequest(query);
         }
+    }
+
+    readonly struct GalleryImage {
+        static readonly Regex HashInUrl = new Regex("/([0-9A-Fa-f]{40})/", RegexOptions.Compiled);
+
+        public readonly string Url;
+        /// <summary>The image's SHA-1 as Steam files it, upper-case; empty when the URL does not carry one.</summary>
+        public readonly string ContentHash;
+
+        public GalleryImage(string url) {
+            Url = url;
+            Match match = HashInUrl.Match(url ?? "");
+            ContentHash = match.Success ? match.Groups[1].Value.ToUpperInvariant() : "";
+        }
+    }
+
+    /// <summary>
+    /// Fetches the cover and every gallery image from Steam's image server and lists the ones that fail. Steam reports
+    /// an update as successful even when it leaves the page pointing at deleted images, so only fetching them proves
+    /// the page works.
+    /// </summary>
+    static List<string> BrokenImages(ItemDetails details) {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var broken = new List<string>();
+        IEnumerable<string> urls = details.GalleryImages.Select(image => image.Url).Prepend(details.PreviewUrl);
+        foreach (string url in urls) {
+            using HttpResponseMessage response = client.GetAsync(url).GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode) {
+                broken.Add($"{(int)response.StatusCode} {url}");
+            }
+        }
+        return broken;
     }
 
     static void Require(bool succeeded, string action) {
