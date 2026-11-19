@@ -59,3 +59,15 @@ recognised by its serialized field names. Loading `Common.bundle` takes a few mi
   effect for that camera.
 - Shaders without fog that ship with the game: Unity's built-in `Sprites/Default` and `UI/Default` (in
   `UnityBuiltInShaders.bundle`), and the game's `Sprites/Camera Facing`.
+
+## The island's scenery and drillships, as found
+
+- **Trees are Unity terrain trees** (`TerrainData.treeInstances`, placed by `TerrainBuilder`): no GameObjects and
+  no colliders, so raycasts pass straight through them. The models are `PoplarTree`, `MapleTree` and `SmallBush`.
+  The terrain draws each at its prefab's root scale (2 for the trees) times the instance's own scale, so a maple
+  stands about 40 m tall with a crown reaching 15 to 18 m from its trunk.
+- Most surface landing sites are forest clearings with 50 to 140 trees within 90 m. The most open, under open sky,
+  are Dangerous Edge (34) and The Edge (40), both on the coast.
+- A drillship's pivot is near one end, not its middle. `Train.Length` is its length along the track: 94 m for the
+  fully built tier 3 drillship in `StreamingAssets/Drillships/CreativeDrillship.save`, whose deployed modules make
+  it about 44 m wide.

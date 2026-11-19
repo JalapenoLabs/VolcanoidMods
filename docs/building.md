@@ -67,6 +67,13 @@ folder before and after the run and warns if anything in it changed.
 - `--workshop` tests the subscribed Workshop copy instead of a fresh build.
 - `--game-args "..."` passes extra arguments to the game, such as `-daynight-at 40` to hold midnight from the
   first frame.
+- Marketing shots of a built drillship: `--game-args "-daynight-showcase DESIGN"` spawns a drillship design,
+  deployed, at the most open free surface landing site (under open sky, with the fewest trees within 90 m), builds a
+  light into every empty light slot, and photographs it instead of the player's view: once from beyond it under the
+  moon, once along its side. Each view searches a grid of camera positions for one that fits the whole hull in frame
+  with clear sightlines past rocks, buildings and trees. The game's own
+  `Volcanoids_Data/StreamingAssets/Drillships/CreativeDrillship.save` is a fully built tier 3 drillship. The log
+  lists every surface landing site with its sky exposure and tree count; `-daynight-showcase-site NAME` picks one.
 - On Hyprland the game opens on the hidden `special:agent` workspace, and its sound goes to a temporary PulseAudio
   null sink, so a run neither takes over the screen nor makes noise.
 - The save loads with its own multiplayer settings, so a co-op save opens its Steam lobby for the length of the run.

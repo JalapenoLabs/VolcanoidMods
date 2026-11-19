@@ -109,4 +109,5 @@ dims the moonlight, stars and moon by it, so ash hides the night sky too, withou
 Every brightness and colour lives in `Lighting/NightLook.cs`. Developer launch options (`DevOptions.cs`) hold the clock
 at a minute (`-daynight-at 40`), pick a moon (`-daynight-moon 0.5`), speed it up (`-daynight-speed 30`), or photograph
 a list of moments and quit (`-daynight-capture DIR -daynight-shots "15,30.5,40@0.5"`), which `scripts/smoke_test.py`
-drives.
+drives. For marketing shots, `-daynight-showcase FILE` adds a fully built drillship design, lit in every light slot,
+and frames it instead of the player's view (`docs/building.md#smoke-tests-linux`).

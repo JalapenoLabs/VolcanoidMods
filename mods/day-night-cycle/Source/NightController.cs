@@ -52,6 +52,8 @@ internal sealed class NightController : MonoBehaviour {
     NightFrame frame;
     Camera renderingCamera;
     Period? lastPeriod;
+    /// <summary>The developer capture rig, while capturing. Its camera lift wraps the night's camera changes.</summary>
+    CaptureDirector captureDirector;
 
     public SyncedClock Clock => clock;
 
@@ -92,7 +94,8 @@ internal sealed class NightController : MonoBehaviour {
         RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
 
         if (devOptions.IsCapturing) {
-            gameObject.AddComponent<CaptureDirector>().Begin(this, devOptions);
+            captureDirector = gameObject.AddComponent<CaptureDirector>();
+            captureDirector.Begin(this, devOptions);
         }
     }
 
@@ -129,6 +132,10 @@ internal sealed class NightController : MonoBehaviour {
     }
 
     void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera) {
+        // A capture's lifted camera must be in place before the night applies: the sky dome centres on the camera.
+        if (captureDirector != null) {
+            captureDirector.LiftForRender(camera);
+        }
         float? surface = SurfaceOf(camera);
         if (!surface.HasValue) {
             return;
@@ -161,6 +168,9 @@ internal sealed class NightController : MonoBehaviour {
     void OnEndCameraRendering(ScriptableRenderContext context, Camera camera) {
         if (camera == renderingCamera) {
             RestoreEffects();
+        }
+        if (captureDirector != null) {
+            captureDirector.LowerAfterRender(camera);
         }
     }
 

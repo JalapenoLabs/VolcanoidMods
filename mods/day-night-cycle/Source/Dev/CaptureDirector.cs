@@ -1,5 +1,6 @@
 // Copyright © 2026 Jalapeno Labs
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -7,7 +8,6 @@ using System.Text;
 using JalapenoLabs.DayNightCycle.Cycle;
 using JalapenoLabs.DayNightCycle.Lighting;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace JalapenoLabs.DayNightCycle.Dev;
 
@@ -16,34 +16,39 @@ namespace JalapenoLabs.DayNightCycle.Dev;
 ///
 /// A save often leaves the player inside the drillship, so most views lift the player's own camera 45 m and aim it
 /// relative to the sky's path: once towards sunset, once up towards the moon's arc. The lift happens the same way the
-/// night itself works, inside the camera's render and undone afterwards, so the game never sees the camera move. The
-/// game's camera shake (ShakeListener) sets the view matrix from the player's head in Camera.onPreRender, so the lift
-/// sets it again after that. The player's real view is captured too, with the HUD and FPS counter off.
+/// night itself works, inside the camera's render and undone afterwards, so the game never sees the camera move.
+/// NightController wraps its own per-camera changes in the lift (<see cref="LiftForRender"/>, then
+/// <see cref="LowerAfterRender"/>), because the sky dome centres itself on the camera and must see where it really
+/// renders from. The game's camera shake (ShakeListener) sets the view matrix from the player's head in
+/// Camera.onPreRender, so the lift sets it again after that. The player's real view is captured too, with the HUD and
+/// FPS counter off.
+///
+/// With -daynight-showcase it first spawns a fully built drillship (<see cref="ShowcaseDrillship"/>) and frames that
+/// instead (<see cref="ShowcaseCamera"/>): once from the side opposite the moon, looking up so the moon rides above
+/// the hull, and once from close in at three-quarters, along the deployed modules.
 /// </summary>
 internal sealed class CaptureDirector : MonoBehaviour {
-    /// <summary>One framing, captured at every requested moment.</summary>
+    /// <summary>
+    /// One framing, captured at every requested moment. Its pose is worked out at capture time, because a view aimed
+    /// at the moon depends on where the moon is in that shot. A null pose is the player's own view.
+    /// </summary>
     readonly struct View {
         public readonly string Name;
-        /// <summary>False for the player's real view; true to lift and aim the camera.</summary>
-        public readonly bool IsLifted;
-        public readonly bool FacesSunset;
-        public readonly float PitchDegrees;
+        public readonly Func<Pose?> Pose;
+        /// <summary>A vertical field of view for this view only, or null for the game's own.</summary>
+        public readonly float? FieldOfView;
 
-        public View(string name, bool isLifted, bool facesSunset, float pitchDegrees) {
+        public View(string name, Func<Pose?> pose, float? fieldOfView = null) {
             Name = name;
-            IsLifted = isLifted;
-            FacesSunset = facesSunset;
-            PitchDegrees = pitchDegrees;
+            Pose = pose;
+            FieldOfView = fieldOfView;
         }
     }
 
-    static readonly View[] Views = {
-        new View("sunset", isLifted: true, facesSunset: true, pitchDegrees: -6),
-        new View("moon", isLifted: true, facesSunset: false, pitchDegrees: 14),
-        new View("player", isLifted: false, facesSunset: false, pitchDegrees: 0),
-    };
-
     const float LiftHeight = 45;
+
+    /// <summary>How long a freshly spawned showcase drillship gets for its modules and lights to deploy.</summary>
+    const float ShowcaseSettleSeconds = 8;
 
     /// <summary>How long to wait after loading for streaming, shader warm-up and the loading screen to clear.</summary>
     const float LoadSettleSeconds = 15;
@@ -56,6 +61,8 @@ internal sealed class CaptureDirector : MonoBehaviour {
     Camera screenCamera;
     Pose? liftedPose;
     Pose savedPose;
+    float? liftedFieldOfView;
+    float savedFieldOfView;
     bool isPoseOverridden;
     Matrix4x4 savedViewMatrix;
     bool hadCustomViewMatrix;
@@ -70,14 +77,10 @@ internal sealed class CaptureDirector : MonoBehaviour {
     }
 
     void OnEnable() {
-        RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
-        RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
         Camera.onPreRender += OnCameraPreRender;
     }
 
     void OnDisable() {
-        RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
-        RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
         Camera.onPreRender -= OnCameraPreRender;
     }
 
@@ -97,14 +100,32 @@ internal sealed class CaptureDirector : MonoBehaviour {
         Options.Instance.ShowHUD = false;
         Options.Instance.ShowFps = false;
 
+        Train showcase = null;
+        if (devOptions.ShowcaseDesign != null) {
+            showcase = ShowcaseDrillship.Spawn(
+                devOptions.ShowcaseDesign,
+                devOptions.ShowcaseSite,
+                screenCamera.transform.position
+            );
+            yield return new WaitForSecondsRealtime(ShowcaseSettleSeconds);
+        }
+        List<View> views = BuildViews(screenCamera.transform.position, showcase);
+
         for (int shotIndex = 0; shotIndex < devOptions.Shots.Count; shotIndex++) {
             DevOptions.Shot shot = devOptions.Shots[shotIndex];
             controller.Clock.Hold(CycleSchedule.FindMoment(controller.Clock.Now, shot.Minute, shot.MoonPhase));
+            // Let the night sample the held moment before views are aimed at its moon.
+            yield return null;
 
-            foreach (View view in Views) {
-                if (view.IsLifted) {
-                    liftedPose = Aim(view, screenCamera.transform.position);
-                    // Lifted 45 m, the camera is on the surface whatever zone the player stands in.
+            foreach (View view in views) {
+                Pose? pose = view.Pose();
+                if (pose.HasValue && showcase != null) {
+                    Debug.Log($"{DayNightCycleMod.LogPrefix}{view.Name} camera at {pose.Value.position}");
+                }
+                liftedFieldOfView = view.FieldOfView;
+                if (pose.HasValue) {
+                    liftedPose = pose;
+                    // A lifted camera is out on the surface whatever zone the player stands in.
                     controller.TreatAsSurfaceCamera(screenCamera);
                 } else {
                     liftedPose = null;
@@ -166,16 +187,36 @@ internal sealed class CaptureDirector : MonoBehaviour {
         return names.Count > 0 ? string.Join(", ", names) : "no zones";
     }
 
-    Pose Aim(in View view, Vector3 playerPosition) {
-        Vector3 horizontal = view.FacesSunset
+    List<View> BuildViews(Vector3 playerPosition, Train showcase) {
+        if (showcase != null) {
+            var framing = new ShowcaseCamera(showcase, ShowcaseDrillship.MeasureBounds(showcase), screenCamera.aspect);
+            return new List<View> {
+                new View(
+                    "showcase-moon",
+                    () => framing.FrameUnderMoon(controller.Frame.MoonDirection),
+                    ShowcaseCamera.FieldOfView
+                ),
+                new View("showcase-side", () => framing.FrameAlongSide(), ShowcaseCamera.FieldOfView),
+            };
+        }
+        return new List<View> {
+            new View("sunset", () => AimFromAbove(playerPosition, facesSunset: true, pitchDegrees: -6)),
+            new View("moon", () => AimFromAbove(playerPosition, facesSunset: false, pitchDegrees: 14)),
+            new View("player", () => null),
+        };
+    }
+
+    Pose AimFromAbove(Vector3 playerPosition, bool facesSunset, float pitchDegrees) {
+        Vector3 horizontal = facesSunset
             ? -controller.Geometry.RiseDirection
             : Vector3.ProjectOnPlane(controller.Geometry.HighestDirection, Vector3.up).normalized;
-        float pitch = view.PitchDegrees * Mathf.Deg2Rad;
+        float pitch = pitchDegrees * Mathf.Deg2Rad;
         Vector3 forward = horizontal * Mathf.Cos(pitch) + Vector3.up * Mathf.Sin(pitch);
         return new Pose(playerPosition + Vector3.up * LiftHeight, Quaternion.LookRotation(forward));
     }
 
-    void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera) {
+    /// <summary>Moves the screen camera to the current view's pose for this render, if the view has one.</summary>
+    public void LiftForRender(Camera camera) {
         if (camera != screenCamera || !liftedPose.HasValue) {
             return;
         }
@@ -187,6 +228,10 @@ internal sealed class CaptureDirector : MonoBehaviour {
 
         cameraTransform.SetPositionAndRotation(liftedPose.Value.position, liftedPose.Value.rotation);
         camera.worldToCameraMatrix = ViewMatrix(liftedPose.Value);
+        savedFieldOfView = camera.fieldOfView;
+        if (liftedFieldOfView.HasValue) {
+            camera.fieldOfView = liftedFieldOfView.Value;
+        }
         // ZoneSun switches the sun off for a camera inside the drillship; a lifted camera is out in the open.
         RenderSettings.sun.enabled = true;
         isPoseOverridden = true;
@@ -198,7 +243,8 @@ internal sealed class CaptureDirector : MonoBehaviour {
         }
     }
 
-    void OnEndCameraRendering(ScriptableRenderContext context, Camera camera) {
+    /// <summary>Puts the screen camera back where the game had it, after a lifted render.</summary>
+    public void LowerAfterRender(Camera camera) {
         if (camera != screenCamera || !isPoseOverridden) {
             return;
         }
@@ -211,6 +257,7 @@ internal sealed class CaptureDirector : MonoBehaviour {
             hasLoggedLift = true;
         }
         camera.transform.SetPositionAndRotation(savedPose.position, savedPose.rotation);
+        camera.fieldOfView = savedFieldOfView;
         if (hadCustomViewMatrix) {
             camera.worldToCameraMatrix = savedViewMatrix;
         } else {

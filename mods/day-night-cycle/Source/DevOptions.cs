@@ -18,6 +18,8 @@ namespace JalapenoLabs.DayNightCycle;
 ///   -daynight-speed 30       run the clock 30 times faster (a whole cycle in 100 seconds)
 ///   -daynight-capture DIR    after loading, screenshot each moment in -daynight-shots into DIR, then quit
 ///   -daynight-shots LIST     comma-separated minutes, each optionally with a moon phase: "15,30,40@0.5,40@0"
+///   -daynight-showcase FILE  with a capture, spawn this drillship design fully built and lit, and frame it instead
+///   -daynight-showcase-site NAME   the surface landing site to spawn it at (default: the most open free one)
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>One moment to photograph: minutes since sunrise, and optionally the moon phase to show.</summary>
@@ -40,13 +42,27 @@ internal sealed class DevOptions {
     public readonly double Speed;
     public readonly string CaptureDirectory;
     public readonly IReadOnlyList<Shot> Shots;
+    /// <summary>A drillship design file to spawn and frame during a capture, or null.</summary>
+    public readonly string ShowcaseDesign;
+    /// <summary>The landing site to spawn the showcase drillship at, or null for the most open free one.</summary>
+    public readonly string ShowcaseSite;
 
-    DevOptions(double? holdMinute, double? holdMoonPhase, double speed, string captureDirectory, List<Shot> shots) {
+    DevOptions(
+        double? holdMinute,
+        double? holdMoonPhase,
+        double speed,
+        string captureDirectory,
+        List<Shot> shots,
+        string showcaseDesign,
+        string showcaseSite
+    ) {
         HoldMinute = holdMinute;
         HoldMoonPhase = holdMoonPhase;
         Speed = speed;
         CaptureDirectory = captureDirectory;
         Shots = shots;
+        ShowcaseDesign = showcaseDesign;
+        ShowcaseSite = showcaseSite;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
@@ -83,7 +99,9 @@ internal sealed class DevOptions {
             holdMoonPhase: ParseNumber(ReadValue(arguments, "-daynight-moon"), "-daynight-moon"),
             speed: ParseNumber(ReadValue(arguments, "-daynight-speed"), "-daynight-speed") ?? 1,
             captureDirectory: captureDirectory,
-            shots: shots
+            shots: shots,
+            showcaseDesign: ReadValue(arguments, "-daynight-showcase"),
+            showcaseSite: ReadValue(arguments, "-daynight-showcase-site")
         );
     }
 
@@ -96,6 +114,7 @@ internal sealed class DevOptions {
             : "not held";
         string capture = IsCapturing
             ? $", capturing {Shots.Count} shots into {CaptureDirectory}"
+                + (ShowcaseDesign != null ? $" around a showcase drillship from {ShowcaseDesign}" : "")
             : "";
         return $"Developer clock: {hold}, speed x{Speed}{capture}.";
     }
