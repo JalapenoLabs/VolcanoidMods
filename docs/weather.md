@@ -65,7 +65,7 @@ paused and a save does not remember its weather.
 | Exposure | Where | What the storm does |
 | --- | --- | --- |
 | Outside | Out under the open sky | Everything: rain on the lens, rain loud and clear |
-| Sheltered | In a drillship (`BoardedDrillship.IsInside`), a drillship interior zone, a blast shelter or blast mine (`BlastWaveSafeZone`), or under any solid roof (a ray up 120 m against `Layers.MaskExplosionVisibility`) | The storm is outside: muffled sound, no lens drops, no lightning damage |
+| Sheltered | In a drillship (`BoardedDrillship.IsInside`), a drillship interior zone, a blast shelter or blast mine (`BlastWaveSafeZone`), or under any solid roof (a ray up 120 m against `Layers.MaskExplosionVisibility`) | The storm is outside: muffled sound, no lens drops, no lightning damage, and only a faint flicker of its flashes |
 | Underground | In zones with no surface layer and the underground layer, or in a drillship travelling underground | Nothing at all, not even the darker light |
 
 The surface share eases over 1.5 seconds and the outdoor share over 0.6, so crossing a threshold never snaps.
@@ -90,12 +90,18 @@ generated on a worker thread when a game loads, from fixed seeds.
 | `WetSurfaces` | Raises the smoothness of the terrain layers and the drillships' exterior paint with wetness, and restores it exactly |
 | `Puddles` | Puddles on flat, open, non-grassy terrain near the camera, kept clear of lava, that grow with wetness and ripple in the rain |
 | `LensRain` | Drops on a screen overlay under the HUD, out in the open only, more when looking up; hidden with the HUD |
-| `LightningStrikes` | Brings each scheduled strike down: bolt, flash lights in the cloud and on the ground, a directional flash, thunder and damage |
+| `LightningStrikes` | Brings each scheduled strike down: bolt, a light under the cloud base and one on the ground, a directional flash, thunder and damage |
 | `StormSea` | Raises the ocean's wave amplitude and length, swings the swell before the wind, and adds foam and chop |
 | `LavaSteam` | Steam columns over every surface lava pool, with a local fog volume (priority 11) that makes them hard to see through; always on gently, far stronger in rain |
 
 `DrillshipExteriors` finds every drillship's exterior renderers (its paint system separates exterior from interior)
 every 8 seconds, for `HullRain` and `WetSurfaces`.
+
+Lightning's lights cast no shadows (URP gives shadows to one directional light, the sun), so they would shine
+straight through rock and hulls. Every flash light is therefore scaled by the player's exposure: full strength
+outside, 15% under a roof (a flicker at the windows), none underground. A bolt's cloud light hangs 40 m below the cloud
+deck's base, lighting the clouds from beneath as the channel does; the lit smoke puffs catch it, so the cloud masses
+around a bolt flare up, plainly so at night. Placed inside the cloud layer, it blew the nearest puffs out into a disc.
 
 ### Working alongside Day/Night Cycle
 
