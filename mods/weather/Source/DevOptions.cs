@@ -29,6 +29,9 @@ namespace JalapenoLabs.Weather;
 ///   -weather-showcase-site NAME the surface landing site to spawn it at (default: the most open free one)
 ///   -weather-test-damage        in the first thunderstorm moment, strike the player (out in the open) and the nearest
 ///                               cog, and log their health before and after
+///   -weather-skip LIST          leave out parts of the storm by class name ("LavaSteam,StormSea"), to see what each
+///                               one contributes
+///   -weather-in-gust            with a capture, move each moment on to the next full gust of wind
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>A moment within a storm of one kind.</summary>
@@ -73,6 +76,10 @@ internal sealed class DevOptions {
     /// <summary>The landing site to spawn the showcase drillship at, or null for the most open free one.</summary>
     public readonly string ShowcaseSite;
     public readonly bool IsTestingDamage;
+    /// <summary>Parts of the storm to leave out, by class name.</summary>
+    public readonly HashSet<string> SkippedParts;
+    /// <summary>Whether captures wait for a full gust, to photograph the wind at its height.</summary>
+    public readonly bool IsSeekingGusts;
 
     DevOptions(
         Moment? start,
@@ -85,7 +92,9 @@ internal sealed class DevOptions {
         bool isSurveying,
         string showcaseDesign,
         string showcaseSite,
-        bool isTestingDamage
+        bool isTestingDamage,
+        HashSet<string> skippedParts,
+        bool isSeekingGusts
     ) {
         Start = start;
         IsFrozen = isFrozen;
@@ -98,12 +107,14 @@ internal sealed class DevOptions {
         ShowcaseDesign = showcaseDesign;
         ShowcaseSite = showcaseSite;
         IsTestingDamage = isTestingDamage;
+        SkippedParts = skippedParts;
+        IsSeekingGusts = isSeekingGusts;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
 
     public bool IsDefault => !Start.HasValue && Speed == 1 && !IsCapturing && SoundDumpDirectory == null
-        && !IsSurveying;
+        && !IsSurveying && SkippedParts.Count == 0;
 
     public static DevOptions FromCommandLine() {
         string[] arguments = Environment.GetCommandLineArgs();
@@ -153,7 +164,12 @@ internal sealed class DevOptions {
             isSurveying: Array.IndexOf(arguments, "-weather-survey") >= 0,
             showcaseDesign: ReadValue(arguments, "-weather-showcase"),
             showcaseSite: ReadValue(arguments, "-weather-showcase-site"),
-            isTestingDamage: Array.IndexOf(arguments, "-weather-test-damage") >= 0
+            isTestingDamage: Array.IndexOf(arguments, "-weather-test-damage") >= 0,
+            skippedParts: new HashSet<string>(
+                ReadValue(arguments, "-weather-skip")?.Split(',') ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase
+            ),
+            isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0
         );
     }
 
@@ -177,7 +193,10 @@ internal sealed class DevOptions {
         string survey = IsSurveying
             ? ", surveying the scene"
             : "";
-        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}.";
+        string skipped = SkippedParts.Count > 0
+            ? $", leaving out {string.Join(", ", SkippedParts)}"
+            : "";
+        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}{skipped}.";
     }
 
     static Moment? ParseMoment(string text, string option) {

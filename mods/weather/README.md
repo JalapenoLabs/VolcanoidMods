@@ -22,6 +22,9 @@ The storm comes with everything that belongs to it:
 - Raindrops land on your view and run down it while you're out in the open.
 - Puddles gather on open ground, ripple in the rain, and dry up after the storm.
 - The ground and drillship hulls turn glossy; rain splashes off the hulls and pours off the roof edges.
+- Wind you can see: gusts tear leaves from the trees around you and blow them downwind, drive sheets of spray
+  across the ground, ripple the grass, and stream the drillships' chimney smoke off sideways. The rain slants harder
+  and the wind roars in each gust.
 - The sea rises with the wind: bigger swells, whitecaps and chop.
 - Lava pools steam all the time, and boil off great white clouds when rain falls on them. Walking through the steam
   is hard going: you can barely see the far side of the pool.

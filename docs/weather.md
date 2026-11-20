@@ -25,6 +25,7 @@ These come from the user and are fixed:
 - **Nothing underground:** no sound, HUD effect or lighting change while the player is in caves or tunnels.
 - **Optional extras** taken up: seas that grow rougher with the storm, and large steam clouds over the surface's lava
   pools that are hard to see through.
+- **Wind you can see:** the trees' leaves pushed around all in one direction, and visible wind bursts.
 - **Nothing is configurable:** no settings, nothing per save; everything is hardcoded.
 
 ## The clock
@@ -50,7 +51,11 @@ paused and a save does not remember its weather.
   | Heavy rain | 1 | 0.75 | 1 | 1 | 7 | no |
   | Thunderstorm | 1 | 0.9 | 1 | 1 | 10 | yes |
 
-- The rain gusts around its level with slow value noise; the wind's heading is drawn per storm.
+- The rain gusts around its level with slow value noise; the wind's heading is drawn per storm. The wind rises
+  with the clouds and drops with them, so between storms it is zero and the game's own calm holds.
+- Gusts (`WeatherSample.Gust`, 0 to 1) are bursts of a few seconds, every quarter of a minute or so: a value-noise
+  curve with a 7-second period, counted only where it peaks. A full gust blows 70% faster than the steady wind. Like
+  everything else in the forecast they come from the clock, so every player feels the same gust at the same moment.
 - Wetness (puddle depth, the sheen on surfaces) fills over 3 minutes of rain and dries over 4, in closed form, so it
   carries over from the previous slot without any state.
 - A thunderstorm's lightning (`LightningSchedule.cs`) is drawn from the same seed: discharges about 5 seconds apart on
@@ -83,8 +88,10 @@ generated on a worker thread when a game loads, from fixed seeds.
 | --- | --- |
 | `StormSun` | Dims the sun, cools it and softens its shadows, as an owned value at `Application.onBeforeRender` |
 | `StormAmbience` | Per render: dims and tints the ambient light and reflections, and crossfades the skybox into the game's own painted storm sky (the "Afterblast" cubemap of `IslandTimeSkybox`); lightning flashes boost it |
-| `StormVolume` | A global volume (priority 7, `MainZone` layer) with the game's `Fog` and colour saturation: greyer, denser air in heavy rain |
-| `CloudDeck` | 96 clouds of 7 lit puffs each in a 3.2 km field that drifts with the wind and wraps around the camera; they arrive from upwind as cover rises and darken with the storm |
+| `StormVolume` | A global volume (priority 7, `MainZone` layer) with the game's `Fog` and colour saturation, weighted by cloud cover: grey haze in place of the game's blue, a little denser in rain (see below) |
+| `CloudDeck` | 96 clouds of 7 lit puffs each in a 3.2 km field that drifts on the storm's steady wind and wraps around the camera; they arrive from upwind as cover rises and darken with the storm |
+| `StormWind` | Turns up the terrain grass's waving, and bends the drillships' outdoor smoke downwind through a wind zone of its own |
+| `WindDebris` | Leaves torn from the crowns of the trees around the camera, mostly in gusts, and low sheets of spray that gusts drive across the ground |
 | `RainFall` | Near drops around the camera that collide with the world and splash, and a sparser, wider veil of far drops |
 | `HullRain` | Splashes cast onto the roofs of every drillship within 160 m (they grow with distance so they still show), mist over the roofs in heavy rain, and run-off pouring from the roof edges |
 | `WetSurfaces` | Raises the smoothness of the terrain layers and the drillships' exterior paint with wetness, and restores it exactly |
@@ -102,6 +109,37 @@ straight through rock and hulls. Every flash light is therefore scaled by the pl
 outside, 15% under a roof (a flicker at the windows), none underground. A bolt's cloud light hangs 40 m below the cloud
 deck's base, lighting the clouds from beneath as the channel does; the lit smoke puffs catch it, so the cloud masses
 around a bolt flare up, plainly so at night. Placed inside the cloud layer, it blew the nearest puffs out into a disc.
+
+### Fog
+
+The island's clear-day fog is exponential at a density of about 0.0013, in the eruption timeline's sky blue. The
+storm keeps it exponential (the island's linear fog settings are 0 to 0.01 m, which would black everything out) and
+only nudges it: light rain to about 0.0024, a downpour to 0.004. The game's tree leaves take no fog, so thick fog
+washes out the ground and trunks beneath crisp canopies, and from any height the treetops seem to float on a flat
+lake; a pale blue haze over storm-dimmed ground makes that worse. So the storm's haze is a plain darkish grey, and the
+volume's weight is the cloud cover alone, so under full cloud it replaces the blue rather than mixing with it.
+
+### Wind
+
+The island's trees cannot sway. They are SpeedTree 8 trees (`Universal Render Pipeline/Nature/SpeedTree8Extra_PBRLit`)
+whose every material uses `_WINDQUALITY_NONE`; switching a material to a wind quality at runtime renders the trees
+unchanged, as the game ships no wind variant of the shader for them. The game's two wind zones (an ambient one, and
+one that `ShakeWindZone` drives from camera shake) therefore move no trees either. The storm shows its wind in what
+moves instead:
+
+- **Leaves** (`WindDebris`) are torn from the upper crowns of the real terrain trees within 70 m of the camera
+  (`shared/TerrainTrees.cs` measures them), up to 60 a second in a gale's full gust and a quarter of that between
+  gusts, and tumble away downwind with flutter, skittering off the ground and walls. Open ground has none.
+- **Spray sheets** (`WindDebris`): in a gust, long, low veils of mist race across the ground from upwind, more of them
+  the harder it rains.
+- **Grass** (`StormWind`) waves harder and faster through the terrain's own waving-grass settings, restored afterwards.
+- **Smoke** (`StormWind`): particles feel wind zones once their external forces are on. The storm adds a directional
+  wind zone, turned to the wind and strengthening in gusts, and switches external forces on for the smoke systems on
+  drillships' outsides (any smoke material, world-simulated, not under an `InteriorZone` object), so chimneys stream
+  off downwind. It switches them off again when the drillships change or the island unloads.
+- **Rain, steam and the wind's sound** take the gusting wind, so the rain slants harder and the wind roars in a gust.
+
+Inside a drillship or shelter, the leaves and spray in the air are cleared and no more come.
 
 ### Working alongside Day/Night Cycle
 
@@ -148,5 +186,7 @@ own counts and sizes as named constants. Developer launch options (`DevOptions.c
 the next storm of a kind (`-weather-at thunder@-1`), freeze it there (`-weather-hold`), speed it up
 (`-weather-speed 5`), or photograph a list of moments and quit (`-weather-capture DIR -weather-shots
 "light@0.5,thunder@0.5"`), which `scripts/smoke_test.py weather` drives. `-weather-showcase FILE` adds a fully built
-drillship design for the drillship views, as Day/Night's showcase does (`docs/building.md#smoke-tests-linux`), and
-`-weather-test-damage` strikes the player and the nearest COG and logs their health.
+drillship design for the drillship views, as Day/Night's showcase does (`docs/building.md#smoke-tests-linux`),
+`-weather-in-gust` moves each captured moment on to the next full gust, `-weather-skip LavaSteam,StormVolume` leaves
+parts of the storm out to see what each contributes, and `-weather-test-damage` strikes the player and the nearest COG
+and logs their health and armour.

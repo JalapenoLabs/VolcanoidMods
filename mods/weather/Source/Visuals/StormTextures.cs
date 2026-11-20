@@ -23,6 +23,7 @@ internal sealed class StormTextures : IDisposable {
         public ArtImage Puddles;
         public ArtImage LensDrops;
         public ArtImage Bolt;
+        public ArtImage Leaves;
     }
 
     readonly Tasks.Task<Painted> painting;
@@ -40,6 +41,7 @@ internal sealed class StormTextures : IDisposable {
                 Puddles = WeatherArt.PuddleAtlas(14),
                 LensDrops = WeatherArt.LensDropAtlas(15),
                 Bolt = WeatherArt.BoltGlow(),
+                Leaves = WeatherArt.LeafAtlas(16),
             };
         });
     }
@@ -54,6 +56,7 @@ internal sealed class StormTextures : IDisposable {
     public Texture2D Puddles { get; private set; }
     public Texture2D LensDrops { get; private set; }
     public Texture2D Bolt { get; private set; }
+    public Texture2D Leaves { get; private set; }
 
     /// <summary>Uploads the textures once painting has finished. Returns whether they are ready to use.</summary>
     public bool TryFinish() {
@@ -82,6 +85,7 @@ internal sealed class StormTextures : IDisposable {
         Puddles = GameMaterials.Upload("Puddles", painted.Puddles);
         LensDrops = GameMaterials.Upload("LensDrops", painted.LensDrops);
         Bolt = GameMaterials.Upload("Bolt", painted.Bolt);
+        Leaves = GameMaterials.Upload("Leaves", painted.Leaves);
         IsReady = true;
         Debug.Log($"{WeatherMod.LogPrefix}Storm textures ready");
         return true;
@@ -96,7 +100,8 @@ internal sealed class StormTextures : IDisposable {
             Ripple,
             Puddles,
             LensDrops,
-            Bolt
+            Bolt,
+            Leaves
         );
     }
 }

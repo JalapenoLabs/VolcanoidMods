@@ -23,6 +23,9 @@ public static class WeatherArt {
     /// <summary>Drop shapes per side of the lens-drop atlas.</summary>
     public const int LensDropAtlasTiles = 2;
 
+    /// <summary>Leaf shapes per side of the leaf atlas.</summary>
+    public const int LeafAtlasTiles = 2;
+
     /// <summary>
     /// Cumulus puffs for the cloud particles, and the normal map that lets the lit particle shader shade them as
     /// volumes: a flat-bottomed blob with a billowing, cauliflower top, its density read as height for the normals.
@@ -283,6 +286,45 @@ public static class WeatherArt {
                             brightness,
                             alpha
                         );
+                    }
+                }
+            }
+        }
+        return image;
+    }
+
+    /// <summary>
+    /// Leaves torn off by the wind, for the gust debris: pointed ovals with a slightly toothed edge, a stalk, and a
+    /// darker midrib and veins. White, so each particle tints its own leaf green, yellow or brown.
+    /// </summary>
+    public static ArtImage LeafAtlas(ulong seed, int tileSize = 64) {
+        int size = tileSize * LeafAtlasTiles;
+        var image = new ArtImage(size, size);
+        for (int tileY = 0; tileY < LeafAtlasTiles; tileY++) {
+            for (int tileX = 0; tileX < LeafAtlasTiles; tileX++) {
+                int tile = tileY * LeafAtlasTiles + tileX;
+                ulong tileSeed = seed + (ulong)tile * 7919;
+                // Each leaf lies at its own slant, and some are rounder than others.
+                double slant = 0.5 + 0.35 * tile;
+                float cos = (float)Math.Cos(slant);
+                float sin = (float)Math.Sin(slant);
+                float breadth = 0.32f + 0.12f * Noise.Value(tileSeed, 0.5f, 0.5f);
+                for (int y = 0; y < tileSize; y++) {
+                    for (int x = 0; x < tileSize; x++) {
+                        float u = (x + 0.5f) / tileSize * 2 - 1;
+                        float v = (y + 0.5f) / tileSize * 2 - 1;
+                        // Along the leaf (tip at +1, stalk at -1) and across it.
+                        float along = (u * cos + v * sin) * 1.15f;
+                        float across = -u * sin + v * cos;
+                        float teeth = 1 + 0.08f * (float)Math.Sin(along * 22);
+                        float halfWidth = breadth * (float)Math.Pow(Math.Max(0, 1 - along * along), 0.65) * teeth;
+                        float blade = 1 - SmoothStep(halfWidth - 0.03f, halfWidth + 0.03f, Math.Abs(across));
+                        float stalk = along < -0.95f && along > -1.15f && Math.Abs(across) < 0.025f ? 1 : 0;
+                        float alpha = Math.Max(blade * (Math.Abs(along) <= 1 ? 1 : 0), stalk);
+                        float midrib = (float)Math.Exp(-Math.Pow(across / 0.02f, 2));
+                        float veins = 0.5f + 0.5f * (float)Math.Cos((along - Math.Abs(across) * 1.4f) * 18);
+                        float shade = 1 - 0.3f * midrib - 0.08f * veins;
+                        image.Set(tileX * tileSize + x, tileY * tileSize + y, shade, shade, shade, alpha);
                     }
                 }
             }

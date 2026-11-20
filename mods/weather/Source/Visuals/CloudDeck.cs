@@ -156,9 +156,12 @@ internal sealed class CloudDeck : IDisposable {
         float stormDarkness = Mathf.Clamp01(weather.Darkness / 0.9f);
         puffMaterial.SetColor(GameMaterials.BaseColorId, Color.Lerp(FairCloudTint, StormCloudTint, stormDarkness));
 
-        var windDirection = new Vector2(Mathf.Sin(weather.WindHeading), Mathf.Cos(weather.WindHeading));
-        // Drift from the storm's own start, so every player's clouds sit in the same place.
-        float drifted = (float)(now - weather.Storm.CloudsStart) * Mathf.Max(weather.WindSpeed, 2) * 0.8f;
+        // Drift from the storm's own start, so every player's clouds sit in the same place. It runs on the storm's
+        // steady wind: the moment's wind wanders and gusts, and over a whole storm a small change in it would shift
+        // the entire field hundreds of metres, so the clouds would lurch back and forth.
+        Storm storm = weather.Storm;
+        var windDirection = new Vector2(Mathf.Sin(storm.WindHeading), Mathf.Cos(storm.WindHeading));
+        float drifted = (float)(now - storm.CloudsStart) * Mathf.Max(storm.Profile.Wind, 2) * 0.8f;
         Vector2 drift = windDirection * drifted;
         var camera = new Vector2(centre.x, centre.z);
         float cloudBase = Mathf.Max(LowestCloudBase, centre.y + CloudHeightAboveCamera);

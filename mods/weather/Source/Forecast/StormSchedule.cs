@@ -22,10 +22,15 @@ public readonly struct WeatherSample {
     public readonly float Wetness;
     /// <summary>How active the lightning is, 0 to 1. Only thunderstorms have any.</summary>
     public readonly float Electric;
-    /// <summary>Wind speed in metres per second.</summary>
+    /// <summary>The wind's steady speed in metres per second, between gusts.</summary>
     public readonly float WindSpeed;
     /// <summary>Where the wind blows towards, in radians clockwise from north (+z).</summary>
     public readonly float WindHeading;
+    /// <summary>
+    /// How hard the wind is gusting, 0 (holding steady) to 1 (a full gust, <see cref="StormSchedule.GustBoost"/>
+    /// faster than <see cref="WindSpeed"/>). Gusts last a few seconds and come every quarter of a minute or so.
+    /// </summary>
+    public readonly float Gust;
 
     public WeatherSample(
         Storm storm,
@@ -35,7 +40,8 @@ public readonly struct WeatherSample {
         float wetness,
         float electric,
         float windSpeed,
-        float windHeading
+        float windHeading,
+        float gust
     ) {
         Storm = storm;
         Cover = cover;
@@ -45,6 +51,7 @@ public readonly struct WeatherSample {
         Electric = electric;
         WindSpeed = windSpeed;
         WindHeading = windHeading;
+        Gust = gust;
     }
 }
 
@@ -75,6 +82,12 @@ public static class StormSchedule {
 
     /// <summary>How long after the rain starts, and before it stops, the lightning holds off.</summary>
     public const double LightningMarginSeconds = 30;
+
+    /// <summary>A full gust blows this share faster than the steady wind.</summary>
+    public const float GustBoost = 0.7f;
+
+    /// <summary>Gusts rise and fall on roughly this time scale, in seconds.</summary>
+    const double GustPeriodSeconds = 7;
 
     /// <summary>Puddles fill towards their depth with this time constant while it rains.</summary>
     const double PuddleFillSeconds = 180;
@@ -127,9 +140,13 @@ public static class StormSchedule {
                 * (1 - SmoothStep(storm.RainEnd - LightningMarginSeconds, storm.RainEnd, syncedSeconds));
         }
 
-        double windSpeed = profile.Wind * (0.25 + 0.75 * gathering)
-            * (1 + 0.25 * StormRandom.Wander(storm.Seed + 1, syncedSeconds, 12));
+        // The wind rises with the clouds and drops with them: between storms the game's own calm holds.
+        double windWander = StormRandom.Wander(storm.Seed + 1, syncedSeconds, 12);
+        double windSpeed = profile.Wind * gathering * (1 + 0.25 * windWander);
         double windHeading = storm.WindHeading + 0.35 * StormRandom.Wander(storm.Seed + 2, syncedSeconds, 90);
+        // Gusts are bursts of a few seconds, when a quickly wandering curve peaks; between them the wind holds steady.
+        double gustCurve = (StormRandom.Wander(storm.Seed + 3, syncedSeconds, GustPeriodSeconds) + 1) / 2;
+        double gust = SmoothStep(0.55, 0.92, gustCurve) * gathering;
 
         // The previous hour's puddles may not have dried completely.
         double wetness = Math.Max(Wetness(storm, syncedSeconds), Wetness(StormInSlot(storm.Slot - 1), syncedSeconds));
@@ -142,7 +159,8 @@ public static class StormSchedule {
             (float)wetness,
             (float)electric,
             (float)windSpeed,
-            (float)windHeading
+            (float)windHeading,
+            (float)gust
         );
     }
 

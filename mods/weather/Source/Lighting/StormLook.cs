@@ -35,12 +35,19 @@ internal static class StormLook {
     public const float SkyStormExposure = 0.8f;
 
     /// <summary>
-    /// Fog thickens in rain: a downpour hides the far side of the island. The fog colour's alpha is how much of it
-    /// veils the skybox (the game's sky shader reads it), kept low so the painted storm clouds show through the haze.
+    /// Fog thickens in rain: a downpour hides the far side of the island. Only a little, though: the game's tree
+    /// leaves take no fog, so thick fog washes out the ground and trunks beneath crisp canopies, and from any height
+    /// the treetops seem to float on a grey lake. The island's clear-day fog is exponential at about 0.0013; light
+    /// rain barely thickens it, a downpour triples it. The fog colour's alpha is how much of it veils the skybox (the
+    /// game's sky shader reads it), kept low so the painted storm clouds show through the haze.
     /// </summary>
-    public const float LightRainFogDensity = 0.0038f;
-    public const float HeavyRainFogDensity = 0.0058f;
-    public static readonly Color LightRainFog = new Color(0.48f, 0.51f, 0.55f, 0.4f);
+    public const float LightRainFogDensity = 0.0022f;
+    public const float HeavyRainFogDensity = 0.004f;
+    /// <summary>
+    /// Light rain's haze is a plain, darkish grey: the game's daytime haze is sky blue, and a pale blue haze lying
+    /// over storm-dimmed ground reads as water.
+    /// </summary>
+    public static readonly Color LightRainFog = new Color(0.4f, 0.41f, 0.43f, 0.35f);
     /// <summary>
     /// A heavy storm's haze is as dark as its sky's horizon, so distant hills and sea fade into it rather than out of
     /// it, and veils a little more of the sky so the two meet without a seam.

@@ -56,7 +56,9 @@ internal sealed class StormVolume : IDisposable {
         fog.color.value = Color.Lerp(StormLook.LightRainFog, StormLook.HeavyRainFog, Mathf.Clamp01(darkness / 0.9f));
         // Rain is what thickens the air; cloud alone only greys it a little.
         fog.density.value = Mathf.Lerp(StormLook.LightRainFogDensity, StormLook.HeavyRainFogDensity, rain);
-        volume.weight = Mathf.Clamp01(cover * (0.35f + 0.65f * Mathf.Clamp01(rain * 2.5f)));
+        // Weighted by the cloud cover alone, so under full cloud the storm's grey replaces the game's blue haze
+        // outright rather than mixing with it; the density itself only climbs with the rain.
+        volume.weight = Mathf.Clamp01(cover);
     }
 
     public void Dispose() {

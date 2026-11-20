@@ -124,7 +124,11 @@ internal sealed class CaptureDirector : MonoBehaviour {
         List<View> views = BuildViews(screenCamera.transform.position, showcase);
         for (int shotIndex = 0; shotIndex < devOptions.Shots.Count; shotIndex++) {
             DevOptions.Moment shot = devOptions.Shots[shotIndex];
-            controller.Clock.Hold(SyncedClock.FindMoment(controller.Clock.Now, shot));
+            double moment = SyncedClock.FindMoment(controller.Clock.Now, shot);
+            if (devOptions.IsSeekingGusts) {
+                moment = NextFullGust(moment);
+            }
+            controller.Clock.Hold(moment);
             yield return null;
             if (devOptions.IsTestingDamage && shot.Kind == Forecast.StormKind.Thunderstorm && !hasTestedDamage) {
                 hasTestedDamage = true;
@@ -160,6 +164,19 @@ internal sealed class CaptureDirector : MonoBehaviour {
         controller.IsLensRainForced = false;
         Debug.Log($"{WeatherMod.LogPrefix}Capture finished; quitting");
         Application.Quit();
+    }
+
+    /// <summary>The first moment from <paramref name="from"/> on, within a minute, of a full gust.</summary>
+    static double NextFullGust(double from) {
+        const double Step = 0.25;
+        const double Search = 60;
+        for (double time = from; time < from + Search; time += Step) {
+            if (Forecast.StormSchedule.Sample(time).Gust > 0.85f) {
+                return time;
+            }
+        }
+        Debug.Log($"{WeatherMod.LogPrefix}No full gust within {Search} s of the moment; capturing it as it is");
+        return from;
     }
 
     /// <summary>

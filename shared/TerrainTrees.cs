@@ -3,10 +3,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace JalapenoLabs.Shared.Showcase;
+namespace JalapenoLabs.Shared;
 
 /// <summary>
-/// Developer captures only: the island's trees, for finding open ground and clear views.
+/// The island's trees: for developer captures, to find open ground and clear views, and for Rain &amp; Thunderstorms,
+/// to tear leaves from the crowns around the player in the wind.
 ///
 /// The trees are Unity terrain trees (the game's TerrainBuilder places them as tree instances), drawn by the terrain
 /// with no GameObjects and no colliders, so raycasts pass straight through them. Each is modelled here as an upright
@@ -23,6 +24,14 @@ internal static class TerrainTrees {
             top = treeBase.y + height;
             this.radius = radius;
         }
+
+        /// <summary>Where the trunk meets the ground.</summary>
+        public Vector3 Base => treeBase;
+
+        public float Height => top - treeBase.y;
+
+        /// <summary>How far the crown reaches from the trunk.</summary>
+        public float Radius => radius;
 
         public bool Contains(Vector3 point) {
             var offset = new Vector2(point.x - treeBase.x, point.z - treeBase.z);

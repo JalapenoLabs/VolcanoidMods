@@ -50,6 +50,8 @@ recognised by its serialized field names. Loading `Common.bundle` takes a few mi
   "normal" and "after the blast" pairs.
 - The sky is `Skybox/CubemapBlended` (`_Tex`, `_Tex2`, `_Blend`, `_Tint`, `_Exposure`, `_Rotation`), blended by
   `IslandTimeSkybox`. The ocean copies those properties into its own material in `WaterMaterialSkybox.Update`.
+- The island's fog is exponential: density about 0.0013 on a clear day in sky blue (0.28, 0.51, 0.68), from a scene
+  base of 0.0026. Its linear start and end are 0 and 0.01 m, so switching it to linear would black everything out.
 - Fog comes from the game's own URP volume component, `UnityEngine.Rendering.Universal.Fog`; `FogRenderPass` copies
   the blended value into `RenderSettings` per camera, so direct `RenderSettings` writes are overwritten.
 - `ZoneSun` on each world camera switches the sun off when the camera has active zones and none on the `MainZone`
@@ -63,7 +65,10 @@ recognised by its serialized field names. Loading `Common.bundle` takes a few mi
 ## The island's scenery and drillships, as found
 
 - **Trees are Unity terrain trees** (`TerrainData.treeInstances`, placed by `TerrainBuilder`): no GameObjects and
-  no colliders, so raycasts pass straight through them. The models are `PoplarTree`, `MapleTree` and `SmallBush`.
+  no colliders, so raycasts pass straight through them. They never sway: every tree material is SpeedTree 8
+  (`SpeedTree8Extra_PBRLit`) with `_WINDQUALITY_NONE`, enabling a wind quality at runtime changes nothing, and the
+  scene's two wind zones (an ambient breeze, and one `ShakeWindZone` drives from camera shake) move only particles
+  that have external forces on. Their leaves also take no fog. The models are `PoplarTree`, `MapleTree` and `SmallBush`.
   The terrain draws each at its prefab's root scale (2 for the trees) times the instance's own scale, so a maple
   stands about 40 m tall with a crown reaching 15 to 18 m from its trunk.
 - Most surface landing sites are forest clearings with 50 to 140 trees within 90 m. The most open, under open sky,

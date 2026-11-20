@@ -74,8 +74,31 @@ public class ForecastTests {
             WeatherSample after = StormSchedule.Sample(storm.CloudsEnd + 1);
             Assert.Equal(0, before.Cover);
             Assert.Equal(0, before.Rain);
+            Assert.Equal(0, before.Gust);
             Assert.Equal(0, after.Cover);
             Assert.Equal(0, after.Rain);
+            Assert.Equal(0, after.Gust);
+        }
+    }
+
+    [Fact]
+    public void Storm_winds_gust_in_bursts_and_hold_steady_between() {
+        foreach (Storm storm in Storms(20)) {
+            int gusting = 0;
+            int samples = 0;
+            float strongest = 0;
+            for (double time = storm.RainStart; time < storm.RainEnd; time += 0.5) {
+                float gust = StormSchedule.Sample(time).Gust;
+                Assert.InRange(gust, 0, 1);
+                strongest = Math.Max(strongest, gust);
+                if (gust > 0.05f) {
+                    gusting++;
+                }
+                samples++;
+            }
+            // A ten-minute storm has real gusts, yet spends most of its time between them.
+            Assert.True(strongest > 0.5f, $"strongest gust {strongest}");
+            Assert.InRange((double)gusting / samples, 0.1, 0.6);
         }
     }
 

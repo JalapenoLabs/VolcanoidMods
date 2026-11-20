@@ -56,6 +56,8 @@ internal sealed class WeatherController : MonoBehaviour {
     HullRain hullRain;
     StormSea sea;
     LavaSteam steam;
+    StormWind wind;
+    WindDebris windDebris;
     bool hasStartedVisuals;
     Phase? lastPhase;
 
@@ -113,7 +115,11 @@ internal sealed class WeatherController : MonoBehaviour {
     }
 
     /// <summary>Creates one part of the storm, logging (not throwing) if it can't start.</summary>
-    static TPart Start<TPart>(Func<TPart> create) where TPart : class {
+    TPart Start<TPart>(Func<TPart> create) where TPart : class {
+        if (devOptions.SkippedParts.Contains(typeof(TPart).Name)) {
+            Debug.Log($"{WeatherMod.LogPrefix}{typeof(TPart).Name} is left out (-weather-skip)");
+            return null;
+        }
         try {
             return create();
         } catch (Exception exception) {
@@ -145,6 +151,8 @@ internal sealed class WeatherController : MonoBehaviour {
         wetSurfaces = Own(Start(() => new WetSurfaces(drillshipExteriors)));
         hullRain = Own(Start(() => new HullRain(transform, textures, drillshipExteriors)));
         steam = Own(Start(() => new LavaSteam(gameObject.scene, textures, lavaPools)));
+        wind = Own(Start(() => new StormWind(transform, drillshipExteriors)));
+        windDebris = Own(Start(() => new WindDebris(transform, textures)));
         hasStartedVisuals = true;
     }
 
@@ -160,11 +168,12 @@ internal sealed class WeatherController : MonoBehaviour {
         Shader.SetGlobalFloat(CloudCoverId, StormAmbience.StormSkyShare(weather.Cover, weather.Darkness));
         if (viewCamera != null) {
             Vector3 eye = EyeOverride ?? viewCamera.transform.position;
-            Vector3 wind = new Vector3(Mathf.Sin(weather.WindHeading), 0, Mathf.Cos(weather.WindHeading))
-                * weather.WindSpeed;
-            audio?.Update(weather.Rain, weather.WindSpeed, surface, location.Outdoors, eye);
+            float gustingSpeed = weather.WindSpeed * (1 + StormSchedule.GustBoost * weather.Gust);
+            Vector3 windVelocity = new Vector3(Mathf.Sin(weather.WindHeading), 0, Mathf.Cos(weather.WindHeading))
+                * gustingSpeed;
+            audio?.Update(weather.Rain, gustingSpeed, surface, location.Outdoors, eye);
             clouds?.Update(in weather, now, eye, surface);
-            rain?.Update(weather.Rain, wind, eye, surface);
+            rain?.Update(weather.Rain, windVelocity, eye, surface);
             lightning?.Update(in weather, now, viewCamera, location, audio);
             puddles?.Update(weather.Wetness, weather.Rain, eye, surface, Time.deltaTime);
             lensRain?.Update(
@@ -177,7 +186,16 @@ internal sealed class WeatherController : MonoBehaviour {
             drillshipExteriors.Update();
             wetSurfaces?.Update(weather.Wetness);
             hullRain?.Update(weather.Rain * surface, eye, Time.deltaTime);
-            steam?.Update(weather.Rain, wind, eye, surface);
+            steam?.Update(weather.Rain, windVelocity, eye, surface);
+            wind?.Update(windVelocity);
+            windDebris?.Update(
+                windVelocity,
+                weather.Gust,
+                weather.Rain,
+                eye,
+                surface * location.Outdoors,
+                Time.deltaTime
+            );
         }
         // The sea answers the storm's wind, not the player's whereabouts: it is the same sea underground or not.
         sea?.Update(weather.Cover * Mathf.Clamp01(weather.WindSpeed / 9), weather.WindHeading);
@@ -243,6 +261,11 @@ internal sealed class WeatherController : MonoBehaviour {
         string partsReport = puddles != null ? $", {puddles.Describe()}" : "";
         partsReport += hullRain != null ? $", {hullRain.Describe()}" : "";
         partsReport += lensRain != null ? $", {lensRain.Describe()}" : "";
+        partsReport += wind != null ? $", {wind.Describe()}, gust {weather.Gust:0.00}" : "";
+        partsReport += windDebris != null ? $", {windDebris.Describe()}" : "";
+        // The fog the game last applied (FogRenderPass reads this same stack), storm included.
+        var fog = VolumeManager.instance.stack.GetComponent<UnityEngine.Rendering.Universal.Fog>();
+        partsReport += fog != null ? $", fog {fog.mode.value} {fog.density.value:0.0000} {fog.color.value}" : "";
         Debug.Log($"{WeatherMod.LogPrefix}Storm {when}: {weather.Storm.Kind}, cover {weather.Cover:0.00}, "
             + $"rain {weather.Rain:0.00}, wetness {weather.Wetness:0.00}{partsReport}, "
             + $"baseline ambient {baseline:0.000}");
