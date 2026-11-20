@@ -159,7 +159,7 @@ internal sealed class HullRain : IDisposable {
         return system;
     }
 
-    /// <summary>Soft wisps of spray, thrown up where the rain beats down hardest, that rise a little and fade.</summary>
+    /// <summary>Soft wisps of spray, thrown up where the rain beats down hardest, that rise and fade.</summary>
     ParticleSystem CreateMist() {
         ParticleSystem system = CreateEmitter("Mist", 1500);
         ParticleSystem.MainModule main = system.main;

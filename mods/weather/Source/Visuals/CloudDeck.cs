@@ -36,8 +36,8 @@ internal sealed class CloudDeck : IDisposable {
     /// thins everything by distance (particles cannot opt out of it), so clouds kept within a few hundred metres stay
     /// clearly visible overhead while distant ones melt into the haze, as real ones do.
     /// </summary>
-    const float CloudHeightAboveCamera = 120;
-    const float LowestCloudBase = 170;
+    public const float CloudHeightAboveCamera = 120;
+    public const float LowestCloudBase = 170;
 
     /// <summary>How far a cloud's fade-in reaches either side of its threshold, in units of cloud cover.</summary>
     const float ArrivalSoftness = 0.14f;

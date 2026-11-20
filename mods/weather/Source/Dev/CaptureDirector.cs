@@ -191,11 +191,18 @@ internal sealed class CaptureDirector : MonoBehaviour {
             Debug.Log($"{WeatherMod.LogPrefix}Damage test: no cog on the island to strike");
         }
         foreach (Health target in targets) {
-            float before = target.CurrentHP;
+            // Armour takes a strike's damage before health does (the game's rule for all but heat and water), so an
+            // armoured player's hit shows in the armour.
+            Armor armor = target.GetComponentInChildren<Armor>();
+            float healthBefore = target.CurrentHP;
+            float armorBefore = armor != null ? armor.HP : 0;
             controller.StrikeAt(target.transform.position);
             yield return new WaitForSecondsRealtime(1);
-            Debug.Log($"{WeatherMod.LogPrefix}Damage test: {target.name} went from {before:0} to "
-                + $"{target.CurrentHP:0} of {target.MaxHP} health");
+            string armorReport = armor != null
+                ? $", armour {armorBefore:0} to {armor.HP:0}"
+                : "";
+            Debug.Log($"{WeatherMod.LogPrefix}Damage test: {target.name} went from {healthBefore:0} to "
+                + $"{target.CurrentHP:0} of {target.MaxHP} health{armorReport}");
         }
         controller.Location.Override = null;
     }

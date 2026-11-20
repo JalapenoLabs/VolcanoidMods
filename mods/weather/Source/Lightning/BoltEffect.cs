@@ -13,6 +13,10 @@ namespace JalapenoLabs.Weather.Lightning;
 /// One lightning discharge on screen: its glowing channel and branches, the light it throws into the clouds and onto
 /// the ground, and its sparks. Kept and reused, since a storm only ever has a few on screen at once.
 ///
+/// The cloud light hangs a little below the cloud base, where the channel lights the clouds from: the lit smoke puffs
+/// catch it, so the cloud masses around a bolt flare up from beneath, plainly so at night. Inside the cloud layer it
+/// would sit within metres of some puffs and blow them out into a glaring disc, like a second moon.
+///
 /// A bolt's shape and flicker are drawn from its strike's seed, so every player sees the same bolt. Real lightning
 /// flickers because one channel carries several return strokes in quick succession; each stroke here is a sharp flash
 /// that decays in a few hundredths of a second, over a dim glow that lingers until the channel fades.
@@ -30,6 +34,9 @@ internal sealed class BoltEffect : IDisposable {
     /// <summary>How bright a stroke's peak light is, before the strike's power and the stroke's share.</summary>
     const float CloudLightIntensity = 900000;
     const float GroundLightIntensity = 120000;
+
+    /// <summary>How far below the cloud base the cloud light hangs.</summary>
+    const float CloudLightDrop = 40;
 
     static readonly Color BoltColor = new Color(0.78f, 0.82f, 1f);
 
@@ -127,7 +134,8 @@ internal sealed class BoltEffect : IDisposable {
 
     /// <summary>Starts the bolt from <paramref name="top"/> (in the cloud) to <paramref name="ground"/>.</summary>
     /// <param name="isInCloud">A flash that stays in the clouds: a faint crawler along the cloud base, if any.</param>
-    public void Fire(Strike strike, Vector3 top, Vector3 ground, bool isInCloud) {
+    /// <param name="cloudBase">How high the cloud deck's base is where the camera sees it.</param>
+    public void Fire(Strike strike, Vector3 top, Vector3 ground, bool isInCloud, float cloudBase) {
         var random = new StormRandom(strike.Seed);
         Top = top;
         Ground = ground;
@@ -173,7 +181,7 @@ internal sealed class BoltEffect : IDisposable {
             line.SetPositions(points.ToArray());
         }
 
-        cloudLight.transform.position = top + Vector3.down * 25;
+        cloudLight.transform.position = new Vector3(top.x, cloudBase - CloudLightDrop, top.z);
         groundLight.transform.position = ground + Vector3.up * 25;
         groundLight.enabled = reachesGround;
         if (reachesGround) {
@@ -202,7 +210,11 @@ internal sealed class BoltEffect : IDisposable {
     }
 
     /// <summary>Advances the flicker. Returns false once the bolt has faded.</summary>
-    public bool Update() {
+    /// <param name="lightShare">
+    /// How much of the bolt's light reaches the world around the camera, 0 to 1. Its lights cast no shadows, so they
+    /// would shine straight through rock and hulls; the caller turns them down under a roof and off underground.
+    /// </param>
+    public bool Update(float lightShare) {
         float age = Time.time - startTime;
         if (age > Lifetime) {
             host.SetActive(false);
@@ -230,8 +242,10 @@ internal sealed class BoltEffect : IDisposable {
             branch.startColor = branchColor;
             branch.endColor = new Color(1, 1, 1, 0);
         }
-        cloudLight.intensity = CloudLightIntensity * Brightness;
-        groundLight.intensity = reachesGround ? GroundLightIntensity * Brightness : 0;
+        cloudLight.intensity = CloudLightIntensity * Brightness * lightShare;
+        groundLight.intensity = reachesGround ? GroundLightIntensity * Brightness * lightShare : 0;
+        cloudLight.enabled = cloudLight.intensity > 0;
+        groundLight.enabled = groundLight.intensity > 0;
         return true;
     }
 

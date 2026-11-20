@@ -1,5 +1,6 @@
 // Copyright © 2026 Jalapeno Labs
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -21,18 +22,21 @@ internal sealed class DrillshipExterior {
 ///
 /// A drillship's paint system already separates its exterior from its interior (the paint grid's exterior case, and
 /// the paint segment items without the interior decal layer), so that is what decides what is outside. Modules are
-/// built and removed as the game goes on, so the exteriors are found again every few seconds; whatever is derived from
-/// them watches <see cref="Version"/> to know when to rebuild.
+/// built and removed as the game goes on, so the exteriors are looked for again every few seconds; whatever is derived
+/// from them watches <see cref="Version"/> to know when to rebuild, which only changes when they really did.
 /// </summary>
 internal sealed class DrillshipExteriors {
     const float RefreshSeconds = 8;
 
     readonly List<DrillshipExterior> all = new List<DrillshipExterior>();
     float nextRefresh;
+    int signature;
 
     public IReadOnlyList<DrillshipExterior> All => all;
 
-    /// <summary>Goes up by one each time the exteriors are found again; 0 until they first are.</summary>
+    /// <summary>
+    /// Goes up by one each time the exteriors change (a drillship or module comes or goes); 0 until first found.
+    /// </summary>
     public int Version { get; private set; }
 
     public void Update() {
@@ -40,7 +44,8 @@ internal sealed class DrillshipExteriors {
             return;
         }
         nextRefresh = Time.time + RefreshSeconds;
-        all.Clear();
+        var found = new List<DrillshipExterior>();
+        var foundSignature = new HashCode();
         foreach (TrainWagons wagons in TrainWagons.Instances) {
             if (wagons == null) {
                 continue;
@@ -56,8 +61,20 @@ internal sealed class DrillshipExteriors {
                     }
                 }
             }
-            all.Add(new DrillshipExterior(wagons.transform, renderers));
+            found.Add(new DrillshipExterior(wagons.transform, renderers));
+            foundSignature.Add(wagons.GetInstanceID());
+            foreach (Renderer renderer in renderers) {
+                foundSignature.Add(renderer.GetInstanceID());
+            }
         }
+        // Unchanged exteriors keep their version, so nothing derived from them (such as where run-off falls) jumps.
+        int newSignature = foundSignature.ToHashCode();
+        if (Version > 0 && newSignature == signature) {
+            return;
+        }
+        signature = newSignature;
+        all.Clear();
+        all.AddRange(found);
         Version++;
     }
 

@@ -40,6 +40,13 @@ internal sealed class LightningStrikes : IDisposable {
     /// <summary>A later lightning flash outshines an earlier one this far away, in metres.</summary>
     const float FlashReach = 900;
 
+    /// <summary>
+    /// How much of a flash's light reaches a sheltered player: a flicker at the windows, not daylight. Lightning's
+    /// lights cast no shadows (URP gives shadows to one directional light, the sun), so at full strength they would
+    /// light a drillship's cabin straight through its hull.
+    /// </summary>
+    const float ShelteredFlashShare = 0.15f;
+
     readonly GameObject host;
     readonly Material boltMaterial;
     readonly Material sparkMaterial;
@@ -112,7 +119,7 @@ internal sealed class LightningStrikes : IDisposable {
         while (nextStrike < strikes.Count && strikes[nextStrike].Time <= now) {
             Fire(strikes[nextStrike++], camera, location, audio);
         }
-        UpdateFlash(camera, location.Surface);
+        UpdateFlash(camera, location);
     }
 
     int FirstStrikeAfter(double now) {
@@ -132,19 +139,25 @@ internal sealed class LightningStrikes : IDisposable {
         }
         var random = new StormRandom(strike.Seed ^ 0xB017UL);
         Vector3 skyPoint = new Vector3(strike.X, CloudBase + random.Range(20, 70), strike.Z);
+        // The cloud deck's base where this camera sees it (the same rule as CloudDeck), for the light under it.
+        float eyeHeight = camera != null ? camera.transform.position.y : 0;
+        float cloudDeckBase = Mathf.Max(
+            CloudDeck.LowestCloudBase,
+            eyeHeight + CloudDeck.CloudHeightAboveCamera
+        );
         if (!strike.ReachesGround) {
             // A flash in the clouds: if it shows a channel at all, it crawls along the cloud base.
             float angle = random.Range(0, Mathf.PI * 2);
             var crawl = new Vector3(Mathf.Sin(angle), 0, Mathf.Cos(angle)) * random.Range(250, 800);
             Vector3 crawlStart = skyPoint - crawl / 2 + Vector3.down * 15;
-            bolt.Fire(strike, crawlStart, crawlStart + crawl, isInCloud: true);
+            bolt.Fire(strike, crawlStart, crawlStart + crawl, isInCloud: true, cloudDeckBase);
             audio?.Thunder(skyPoint, strike.Power, strike.Seed, false, camera, location.Surface, location.Outdoors);
             return;
         }
 
         Vector3 ground = LandingPoint(strike, out Transform struck);
         Vector3 top = new Vector3(ground.x + random.Range(-120, 120), skyPoint.y, ground.z + random.Range(-120, 120));
-        bolt.Fire(strike, top, ground, isInCloud: false);
+        bolt.Fire(strike, top, ground, isInCloud: false, cloudDeckBase);
         audio?.Thunder(ground, strike.Power, strike.Seed, true, camera, location.Surface, location.Outdoors);
         if (struck != null) {
             Debug.Log($"{WeatherMod.LogPrefix}Lightning struck {struck.name} at {ground}");
@@ -281,13 +294,15 @@ internal sealed class LightningStrikes : IDisposable {
     /// directional light from the brightest bolt's direction does the lighting; <see cref="Flash"/> lets the sky and
     /// ambient light join in.
     /// </summary>
-    void UpdateFlash(Camera camera, float surface) {
+    void UpdateFlash(Camera camera, PlayerLocation location) {
+        // None of the storm's light reaches underground, and only a little gets under a roof.
+        float lightShare = location.Surface * Mathf.Lerp(ShelteredFlashShare, 1, location.Outdoors);
         float flash = 0;
         float brightest = 0;
         Vector3 direction = Vector3.up;
         Vector3 eye = camera != null ? camera.transform.position : Vector3.zero;
         foreach (BoltEffect bolt in bolts) {
-            if (!bolt.IsActive || !bolt.Update()) {
+            if (!bolt.IsActive || !bolt.Update(lightShare)) {
                 continue;
             }
             Vector3 middle = (bolt.Top + bolt.Ground) / 2;
@@ -299,7 +314,7 @@ internal sealed class LightningStrikes : IDisposable {
                 direction = (middle - eye).normalized;
             }
         }
-        Flash = Mathf.Clamp01(flash) * surface;
+        Flash = Mathf.Clamp01(flash) * lightShare;
         FlashDirection = direction;
 
         flashLight.enabled = Flash > 0.001f;
