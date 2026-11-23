@@ -36,6 +36,7 @@ internal sealed class WeatherController : MonoBehaviour {
 
     readonly PlayerLocation location = new PlayerLocation();
     readonly DrillshipExteriors drillshipExteriors = new DrillshipExteriors();
+    readonly ShelterVolumes shelters = new ShelterVolumes();
     readonly List<IDisposable> parts = new List<IDisposable>();
 
     SyncedClock clock;
@@ -153,7 +154,7 @@ internal sealed class WeatherController : MonoBehaviour {
             return;
         }
         clouds = Own(Start(() => new CloudDeck(transform, textures)));
-        rain = Own(Start(() => new RainFall(transform, textures)));
+        rain = Own(Start(() => new RainFall(transform, textures, shelters)));
         lightning = Own(Start(() => new LightningStrikes(transform, textures)));
         List<LavaPool> lavaPools = LavaPools.FindOnSurface();
         puddles = Own(Start(() => new Puddles(transform, textures, lavaPools)));
@@ -162,7 +163,7 @@ internal sealed class WeatherController : MonoBehaviour {
         hullRain = Own(Start(() => new HullRain(transform, textures, drillshipExteriors)));
         steam = Own(Start(() => new LavaSteam(gameObject.scene, textures, lavaPools)));
         wind = Own(Start(() => new StormWind(transform, drillshipExteriors)));
-        windDebris = Own(Start(() => new WindDebris(transform, textures)));
+        windDebris = Own(Start(() => new WindDebris(transform, textures, shelters)));
         hasStartedVisuals = true;
     }
 
@@ -183,6 +184,7 @@ internal sealed class WeatherController : MonoBehaviour {
                 * gustingSpeed;
             audio?.Update(weather.Rain, gustingSpeed, surface, location.Outdoors, eye);
             clouds?.Update(in weather, now, eye, surface);
+            shelters.Update(eye);
             rain?.Update(weather.Rain, windVelocity, eye, surface);
             lightning?.Update(in weather, now, viewCamera, location, audio);
             puddles?.Update(weather.Wetness, weather.Rain, eye, surface, Time.deltaTime);
@@ -273,6 +275,9 @@ internal sealed class WeatherController : MonoBehaviour {
         partsReport += lensRain != null ? $", {lensRain.Describe()}" : "";
         partsReport += wind != null ? $", {wind.Describe()}, gust {weather.Gust:0.00}" : "";
         partsReport += windDebris != null ? $", {windDebris.Describe()}" : "";
+        partsReport += rain != null
+            ? $", {shelters.Count} sheltered spaces near, {rain.CountDropsInside(shelters)} drops inside them"
+            : "";
         // The fog the game last applied (FogRenderPass reads this same stack), storm included.
         var fog = VolumeManager.instance.stack.GetComponent<UnityEngine.Rendering.Universal.Fog>();
         partsReport += fog != null ? $", fog {fog.mode.value} {fog.density.value:0.0000} {fog.color.value}" : "";
