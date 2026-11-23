@@ -258,7 +258,7 @@ internal sealed class Puddles : IDisposable {
         }
     }
 
-    /// <summary>Drops cells more than <paramref name="keepCells"/> from the camera's cell, in either direction.</summary>
+    /// <summary>Drops cells more than <paramref name="keepCells"/> from the camera's cell either way.</summary>
     void ForgetFarCells(int centreX, int centreZ, int keepCells) {
         var far = new List<long>();
         foreach (long key in spots.Keys) {
