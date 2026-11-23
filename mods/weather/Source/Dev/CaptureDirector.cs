@@ -177,9 +177,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
     }
 
     /// <summary>
-    /// For performance runs (-weather-perf): logs a view's frame times over a few seconds. The fly view moves the camera
-    /// steadily across the island meanwhile, as the cinematic camera does, so the costs of following a moving camera
-    /// (the rain box, puddle surveys, the trees near the camera) show up in it.
+    /// For performance runs (-weather-perf): logs a view's frame times over a few seconds. The fly view moves the
+    /// camera steadily across the island meanwhile, as the cinematic camera does, so the costs of following a moving
+    /// camera (the rain box, puddle surveys, the trees near the camera) show up in it.
     /// </summary>
     IEnumerator MeasureFrames(string viewName, string shotLabel, bool isFlying) {
         var frameMilliseconds = new List<float>();

@@ -72,30 +72,59 @@ internal static class TerrainTrees {
     /// <summary>Each tree model's measured extent, measured once and logged so the cylinders can be checked.</summary>
     static readonly Dictionary<GameObject, Bounds> modelShapes = new Dictionary<GameObject, Bounds>();
 
+    /// <summary>
+    /// Each terrain's trees, measured once. Reading TerrainData.treeInstances copies the whole array, thousands of
+    /// trees, so asking afresh each time a moving camera needs the trees around it is a needless cost; the island's
+    /// trees never change while it is loaded, and a changed tree count rebuilds the list.
+    /// </summary>
+    static readonly Dictionary<TerrainData, List<Tree>> treesByTerrain = new Dictionary<TerrainData, List<Tree>>();
+
     /// <summary>Every terrain tree with its trunk within <paramref name="reach"/> of a point, overhead.</summary>
     public static List<Tree> Around(Vector3 centre, float reach) {
         var trees = new List<Tree>();
         foreach (Terrain terrain in Terrain.activeTerrains) {
-            TerrainData data = terrain.terrainData;
-            Vector3 origin = terrain.GetPosition();
-            TreePrototype[] prototypes = data.treePrototypes;
-            foreach (TreeInstance instance in data.treeInstances) {
-                Vector3 position = origin + Vector3.Scale(instance.position, data.size);
-                var horizontal = new Vector2(position.x - centre.x, position.z - centre.z);
-                if (horizontal.sqrMagnitude > reach * reach) {
-                    continue;
+            foreach (Tree tree in TreesOf(terrain)) {
+                var horizontal = new Vector2(tree.Base.x - centre.x, tree.Base.z - centre.z);
+                if (horizontal.sqrMagnitude <= reach * reach) {
+                    trees.Add(tree);
                 }
-                Bounds shape = MeasureModel(prototypes[instance.prototypeIndex].prefab);
-                // The widest reach from the trunk in any direction, because instances are rotated about it.
-                float crown = Mathf.Max(
-                    Mathf.Abs(shape.min.x),
-                    Mathf.Abs(shape.max.x),
-                    Mathf.Abs(shape.min.z),
-                    Mathf.Abs(shape.max.z)
-                );
-                trees.Add(new Tree(position, shape.max.y * instance.heightScale, crown * instance.widthScale));
             }
         }
+        return trees;
+    }
+
+    static List<Tree> TreesOf(Terrain terrain) {
+        TerrainData data = terrain.terrainData;
+        if (treesByTerrain.TryGetValue(data, out List<Tree> known) && known.Count == data.treeInstanceCount) {
+            return known;
+        }
+        // Terrains from an island that has since unloaded are gone; forget them rather than hold on.
+        var unloaded = new List<TerrainData>();
+        foreach (TerrainData cached in treesByTerrain.Keys) {
+            if (cached == null) {
+                unloaded.Add(cached);
+            }
+        }
+        foreach (TerrainData gone in unloaded) {
+            treesByTerrain.Remove(gone);
+        }
+
+        var trees = new List<Tree>(data.treeInstanceCount);
+        Vector3 origin = terrain.GetPosition();
+        TreePrototype[] prototypes = data.treePrototypes;
+        foreach (TreeInstance instance in data.treeInstances) {
+            Vector3 position = origin + Vector3.Scale(instance.position, data.size);
+            Bounds shape = MeasureModel(prototypes[instance.prototypeIndex].prefab);
+            // The widest reach from the trunk in any direction, because instances are rotated about it.
+            float crown = Mathf.Max(
+                Mathf.Abs(shape.min.x),
+                Mathf.Abs(shape.max.x),
+                Mathf.Abs(shape.min.z),
+                Mathf.Abs(shape.max.z)
+            );
+            trees.Add(new Tree(position, shape.max.y * instance.heightScale, crown * instance.widthScale));
+        }
+        treesByTerrain[data] = trees;
         return trees;
     }
 
