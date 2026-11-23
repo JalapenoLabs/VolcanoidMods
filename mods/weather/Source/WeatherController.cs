@@ -60,6 +60,7 @@ internal sealed class WeatherController : MonoBehaviour {
     StormSea sea;
     LavaSteam steam;
     StormWind wind;
+    Dev.TreeWindTest treeWindTest;
     WindDebris windDebris;
     bool hasStartedVisuals;
     Phase? lastPhase;
@@ -164,6 +165,9 @@ internal sealed class WeatherController : MonoBehaviour {
         steam = Own(Start(() => new LavaSteam(gameObject.scene, textures, lavaPools)));
         wind = Own(Start(() => new StormWind(transform, drillshipExteriors)));
         windDebris = Own(Start(() => new WindDebris(transform, textures, shelters)));
+        if (devOptions.TreeWindQuality != null) {
+            treeWindTest = Own(Start(() => new Dev.TreeWindTest(devOptions.TreeWindQuality)));
+        }
         hasStartedVisuals = true;
     }
 
@@ -200,6 +204,7 @@ internal sealed class WeatherController : MonoBehaviour {
             hullRain?.Update(weather.Rain * surface, eye, Time.deltaTime);
             steam?.Update(weather.Rain, windVelocity, eye, surface);
             wind?.Update(windVelocity);
+            treeWindTest?.Update(windVelocity, Time.deltaTime);
             windDebris?.Update(
                 windVelocity,
                 weather.Gust,

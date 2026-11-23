@@ -32,6 +32,8 @@ namespace JalapenoLabs.Weather;
 ///   -weather-skip LIST          leave out parts of the storm by class name ("LavaSteam,StormSea"), to see what each
 ///                               one contributes
 ///   -weather-in-gust            with a capture, move each moment on to the next full gust of wind
+///   -weather-tree-wind QUALITY  experiment: switch the trees' SpeedTree wind on at this quality (FASTEST, FAST,
+///                               BETTER, BEST) and feed its global sway inputs, to see whether the trees can move
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>A moment within a storm of one kind.</summary>
@@ -80,6 +82,8 @@ internal sealed class DevOptions {
     public readonly HashSet<string> SkippedParts;
     /// <summary>Whether captures wait for a full gust, to photograph the wind at its height.</summary>
     public readonly bool IsSeekingGusts;
+    /// <summary>The SpeedTree wind quality to try on the trees (-weather-tree-wind), or null.</summary>
+    public readonly string TreeWindQuality;
 
     DevOptions(
         Moment? start,
@@ -94,7 +98,8 @@ internal sealed class DevOptions {
         string showcaseSite,
         bool isTestingDamage,
         HashSet<string> skippedParts,
-        bool isSeekingGusts
+        bool isSeekingGusts,
+        string treeWindQuality
     ) {
         Start = start;
         IsFrozen = isFrozen;
@@ -109,6 +114,7 @@ internal sealed class DevOptions {
         IsTestingDamage = isTestingDamage;
         SkippedParts = skippedParts;
         IsSeekingGusts = isSeekingGusts;
+        TreeWindQuality = treeWindQuality;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
@@ -169,7 +175,8 @@ internal sealed class DevOptions {
                 ReadValue(arguments, "-weather-skip")?.Split(',') ?? Array.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase
             ),
-            isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0
+            isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0,
+            treeWindQuality: ReadValue(arguments, "-weather-tree-wind")?.Trim().ToUpperInvariant()
         );
     }
 
