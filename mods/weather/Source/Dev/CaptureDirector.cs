@@ -46,6 +46,13 @@ internal sealed class CaptureDirector : MonoBehaviour {
     /// </summary>
     const float ViewSettleSeconds = 4;
 
+    /// <summary>How long a performance run measures each view.</summary>
+    const float PerformanceSeconds = 6;
+
+    /// <summary>How fast and how high the fly view travels, like a player flying the cinematic camera.</summary>
+    const float FlySpeed = 25;
+    const float FlyHeight = 30;
+
     /// <summary>How long a freshly spawned showcase drillship gets for its modules and lights to deploy.</summary>
     const float ShowcaseSettleSeconds = 8;
 
@@ -147,6 +154,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                     Debug.Log($"{WeatherMod.LogPrefix}{view.Name} camera at {pose.Value.position}");
                 }
                 yield return new WaitForSecondsRealtime(ViewSettleSeconds);
+                if (devOptions.IsMeasuringPerformance) {
+                    yield return MeasureFrames(view.Name, shot.Label, isFlying: view.Name == "fly" && pose.HasValue);
+                }
 
                 Pose shotPose = pose ?? new Pose(screenCamera.transform.position, screenCamera.transform.rotation);
                 if (controller.StrikeInView(shotPose, view.FieldOfView ?? screenCamera.fieldOfView)) {
@@ -164,6 +174,41 @@ internal sealed class CaptureDirector : MonoBehaviour {
         controller.IsLensRainForced = false;
         Debug.Log($"{WeatherMod.LogPrefix}Capture finished; quitting");
         Application.Quit();
+    }
+
+    /// <summary>
+    /// For performance runs (-weather-perf): logs a view's frame times over a few seconds. The fly view moves the camera
+    /// steadily across the island meanwhile, as the cinematic camera does, so the costs of following a moving camera
+    /// (the rain box, puddle surveys, the trees near the camera) show up in it.
+    /// </summary>
+    IEnumerator MeasureFrames(string viewName, string shotLabel, bool isFlying) {
+        var frameMilliseconds = new List<float>();
+        float until = Time.realtimeSinceStartup + PerformanceSeconds;
+        while (Time.realtimeSinceStartup < until) {
+            yield return null;
+            frameMilliseconds.Add(Time.unscaledDeltaTime * 1000);
+            if (isFlying) {
+                Pose current = liftedPose.Value;
+                Vector3 heading = Vector3.ProjectOnPlane(current.rotation * Vector3.forward, Vector3.up).normalized;
+                Vector3 position = current.position + heading * (FlySpeed * Time.unscaledDeltaTime);
+                liftedPose = new Pose(position, current.rotation);
+                controller.EyeOverride = position;
+            }
+        }
+        frameMilliseconds.Sort();
+        int count = frameMilliseconds.Count;
+        float median = frameMilliseconds[count / 2];
+        float slow = frameMilliseconds[count * 95 / 100];
+        Debug.Log($"{WeatherMod.LogPrefix}Frame times, {shotLabel} {viewName}: median {median:0.0} ms, "
+            + $"95th percentile {slow:0.0} ms, worst {frameMilliseconds[count - 1]:0.0} ms over {count} frames");
+    }
+
+    /// <summary>The fly view starts above the focus, looking along the ground towards the volcano.</summary>
+    static Pose FlyStart(Vector3 focus) {
+        Pose towardsVolcano = LookTowardsVolcano(focus);
+        Vector3 heading = Vector3.ProjectOnPlane(towardsVolcano.rotation * Vector3.forward, Vector3.up).normalized;
+        Vector3 start = focus + Vector3.up * FlyHeight;
+        return new Pose(start, Quaternion.LookRotation(heading + Vector3.down * 0.25f));
     }
 
     /// <summary>The first moment from <paramref name="from"/> on, within a minute, of a full gust.</summary>
@@ -249,6 +294,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                     break;
                 case "lens":
                     views.Add(new View(name, () => LookTowardsVolcano(focus), IslandViewFieldOfView));
+                    break;
+                case "fly":
+                    views.Add(new View(name, () => FlyStart(focus), IslandViewFieldOfView));
                     break;
                 case "hull":
                     views.Add(new View(

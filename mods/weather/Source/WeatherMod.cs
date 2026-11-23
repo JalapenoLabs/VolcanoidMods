@@ -56,6 +56,9 @@ public sealed class WeatherMod : GameMod {
         }
         AudioListener.volume = 0;
         QualitySettings.vSyncCount = 0;
-        Application.targetFrameRate = 30;
+        // A performance run measures what the frame costs, so nothing may hold it back.
+        Application.targetFrameRate = devOptions.IsMeasuringPerformance
+            ? -1
+            : 30;
     }
 }
