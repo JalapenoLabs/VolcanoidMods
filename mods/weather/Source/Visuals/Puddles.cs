@@ -34,7 +34,15 @@ internal sealed class Puddles : IDisposable {
     const float Flatness = 0.15f;
 
     const float LavaClearance = 30;
-    const int CellsCheckedPerFrame = 48;
+
+    /// <summary>
+    /// Each cell's survey costs five raycasts and a splat-map read, so only a few are done each frame: a camera racing
+    /// over new ground (the cinematic camera) fills its surroundings in over a second or two instead of in a burst.
+    /// </summary>
+    const int CellsCheckedPerFrame = 16;
+
+    /// <summary>Past this many surveyed cells, those far behind the camera are forgotten.</summary>
+    const int MostRememberedCells = 2000;
 
     /// <summary>How high above the ground a puddle floats, against z-fighting.</summary>
     const float Lift = 0.025f;
@@ -234,6 +242,9 @@ internal sealed class Puddles : IDisposable {
         int reachCells = Mathf.CeilToInt(Reach / CellSize);
         int centreX = Mathf.FloorToInt(centre.x / CellSize);
         int centreZ = Mathf.FloorToInt(centre.z / CellSize);
+        if (spots.Count > MostRememberedCells) {
+            ForgetFarCells(centreX, centreZ, reachCells * 2);
+        }
         int checks = 0;
         for (int x = centreX - reachCells; x <= centreX + reachCells && checks < CellsCheckedPerFrame; x++) {
             for (int z = centreZ - reachCells; z <= centreZ + reachCells && checks < CellsCheckedPerFrame; z++) {
@@ -244,6 +255,21 @@ internal sealed class Puddles : IDisposable {
                 spots[key] = FindSpot(x, z);
                 checks++;
             }
+        }
+    }
+
+    /// <summary>Drops cells more than <paramref name="keepCells"/> from the camera's cell either way.</summary>
+    void ForgetFarCells(int centreX, int centreZ, int keepCells) {
+        var far = new List<long>();
+        foreach (long key in spots.Keys) {
+            int x = (int)(key >> 32);
+            int z = (int)(uint)(key & 0xFFFFFFFF);
+            if (Mathf.Abs(x - centreX) > keepCells || Mathf.Abs(z - centreZ) > keepCells) {
+                far.Add(key);
+            }
+        }
+        foreach (long key in far) {
+            spots.Remove(key);
         }
     }
 

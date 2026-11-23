@@ -26,7 +26,8 @@ These come from the user and are fixed:
 - **Optional extras** taken up: seas that grow rougher with the storm, and large steam clouds over the surface's lava
   pools that are hard to see through.
 - **Wind you can see:** the trees' leaves pushed around all in one direction, and visible wind bursts.
-- **Nothing is configurable:** no settings, nothing per save; everything is hardcoded.
+- **Nothing about the weather is configurable:** nothing per save; the schedule and look are hardcoded. The one
+  exception, asked for later, is a **Weather volume slider** in the game's audio options.
 
 ## The clock
 
@@ -91,7 +92,7 @@ generated on a worker thread when a game loads, from fixed seeds.
 | `StormVolume` | A global volume (priority 7, `MainZone` layer) with the game's `Fog` and colour saturation, weighted by cloud cover: grey haze in place of the game's blue, a little denser in rain (see below) |
 | `CloudDeck` | 96 clouds of 7 lit puffs each in a 3.2 km field that drifts on the storm's steady wind and wraps around the camera; they arrive from upwind as cover rises and darken with the storm |
 | `StormWind` | Turns up the terrain grass's waving, and bends the drillships' outdoor smoke downwind through a wind zone of its own |
-| `WindDebris` | Leaves torn from the crowns of the trees around the camera, mostly in gusts, and low sheets of spray that gusts drive across the ground |
+| `WindDebris` | Leaves torn from the crowns of the trees around the camera, mostly in gusts, and long wisps of spray that gusts drive across the ground |
 | `RainFall` | Near drops around the camera that collide with the world and splash, and a sparser, wider veil of far drops |
 | `HullRain` | Splashes cast onto the roofs of every drillship within 160 m (they grow with distance so they still show), mist over the roofs in heavy rain, and run-off pouring from the roof edges |
 | `WetSurfaces` | Raises the smoothness of the terrain layers and the drillships' exterior paint with wetness, and restores it exactly |
@@ -130,8 +131,8 @@ moves instead:
 - **Leaves** (`WindDebris`) are torn from the upper crowns of the real terrain trees within 70 m of the camera
   (`shared/TerrainTrees.cs` measures them), up to 60 a second in a gale's full gust and a quarter of that between
   gusts, and tumble away downwind with flutter, skittering off the ground and walls. Open ground has none.
-- **Spray sheets** (`WindDebris`): in a gust, long, low veils of mist race across the ground from upwind, more of them
-  the harder it rains.
+- **Spray wisps** (`WindDebris`): in a gust, long, faint wisps of fine streaks race low across the ground from upwind,
+  each stretched along its own motion and living several seconds with slow fades, more of them the harder it rains.
 - **Grass** (`StormWind`) waves harder and faster through the terrain's own waving-grass settings, restored afterwards.
 - **Smoke** (`StormWind`): particles feel wind zones once their external forces are on. The storm adds a directional
   wind zone, turned to the wind and strengthening in gusts, and switches external forces on for the smoke systems on
@@ -158,12 +159,25 @@ Both mods change the same lights, sky and fog, so they nest rather than fight:
 
 ## Sound
 
-`Audio/WeatherAudio.cs` plays four synthesised loops (downpour, patter, roof drumming, wind) and thunder. Sheltered,
-low-pass filters close down to about 750 Hz, for the muffled, cozy sound of rain heard through a hull or a roof.
-Standing next to a drillship adds the drumming of rain on its hull. Thunder is delayed by its distance at the speed of
-sound and panned towards the strike; within 650 m it starts with a sharp crack, and within 350 m it shakes the camera.
-The sources bypass reverb zones and mixer groups, so caves' reverb never colours the storm, and all of it falls silent
-underground.
+`Audio/WeatherAudio.cs` plays the rain from recordings and synthesises the wind and thunder.
+
+- **Rain** is four CC0 loops in `Content/Sounds/`: light and heavy rain in the open, and the same two as a steel hull
+  lets them through (low-passed, a boosted low drumming, a few short cabin reflections). `Recordings/render.py`
+  makes them from the originals in `Recordings/` (credits in `Recordings/CREDITS.md`), rendering each loop twice
+  through and keeping the second pass, trimmed to the exact sample, so the loops stay seamless. They load at runtime
+  with Unity's own Ogg loader (`UnityWebRequestMultimedia`), kept compressed in memory.
+- Light rain plays the light recording; as the rain strengthens it crossfades into the heavy one. Under a roof the
+  open loops crossfade, at equal power, into the indoor ones; nothing is filtered live, because a cutoff swept as the
+  player moves warbles. The indoor loops start in step with their open twins. Standing beside a drillship out in the
+  open mixes in a little of the indoor loop: the rain drumming on its hull.
+- **Wind** is synthesised; under a roof a second source of the same loop, through a fixed low-pass, crossfades in.
+- **Thunder** is delayed by its distance at the speed of sound and panned towards the strike; within 650 m it starts
+  with a sharp crack, and within 350 m it shakes the camera.
+
+The sources bypass reverb zones and mixer groups, so caves' reverb never colours the storm; they follow the game's
+master volume, and the **Weather** volume slider the mod adds under the game's Warning volume (`WeatherVolumeSlider`,
+a relabelled copy of that row, its value kept in the mod's own data folder by `WeatherSettings`). All of it falls
+silent underground.
 
 ## Lightning damage
 

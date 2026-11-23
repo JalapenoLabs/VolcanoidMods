@@ -20,7 +20,8 @@ namespace JalapenoLabs.Weather;
 ///   -weather-speed 10           run the weather 10 times faster (from the -weather-at moment, if given)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
-///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player); default all
+///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player, fly); default
+///                               all but fly
 ///                               (lens: the island view with the raindrops on the lens shown, though the HUD is off)
 ///   -weather-dump-sounds DIR    write every synthesised sound as a WAV file into DIR
 ///   -weather-survey             log the game's particle materials, water and lava, for building the storm's effects
@@ -32,6 +33,10 @@ namespace JalapenoLabs.Weather;
 ///   -weather-skip LIST          leave out parts of the storm by class name ("LavaSteam,StormSea"), to see what each
 ///                               one contributes
 ///   -weather-in-gust            with a capture, move each moment on to the next full gust of wind
+///   -weather-perf               with a capture, run the frame rate uncapped and log each view's frame times; the
+///                               "fly" view moves the camera across the island as the cinematic camera does
+///   -weather-tree-wind QUALITY  experiment: switch the trees' SpeedTree wind on at this quality (FASTEST, FAST,
+///                               BETTER, BEST) and feed its global sway inputs, to see whether the trees can move
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>A moment within a storm of one kind.</summary>
@@ -59,7 +64,10 @@ internal sealed class DevOptions {
         [StormKind.Thunderstorm] = "thunder",
     };
 
-    static readonly string[] AllViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player" };
+    static readonly string[] AllViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player", "fly" };
+
+    /// <summary>The fly view only means something when measuring performance, so it is asked for by name.</summary>
+    static readonly string[] DefaultViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player" };
 
     /// <summary>The moment the weather starts from instead of the shared clock, or null.</summary>
     public readonly Moment? Start;
@@ -80,6 +88,10 @@ internal sealed class DevOptions {
     public readonly HashSet<string> SkippedParts;
     /// <summary>Whether captures wait for a full gust, to photograph the wind at its height.</summary>
     public readonly bool IsSeekingGusts;
+    /// <summary>Whether captures measure frame times, uncapped (-weather-perf).</summary>
+    public readonly bool IsMeasuringPerformance;
+    /// <summary>The SpeedTree wind quality to try on the trees (-weather-tree-wind), or null.</summary>
+    public readonly string TreeWindQuality;
 
     DevOptions(
         Moment? start,
@@ -94,7 +106,9 @@ internal sealed class DevOptions {
         string showcaseSite,
         bool isTestingDamage,
         HashSet<string> skippedParts,
-        bool isSeekingGusts
+        bool isSeekingGusts,
+        bool isMeasuringPerformance,
+        string treeWindQuality
     ) {
         Start = start;
         IsFrozen = isFrozen;
@@ -109,6 +123,8 @@ internal sealed class DevOptions {
         IsTestingDamage = isTestingDamage;
         SkippedParts = skippedParts;
         IsSeekingGusts = isSeekingGusts;
+        IsMeasuringPerformance = isMeasuringPerformance;
+        TreeWindQuality = treeWindQuality;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
@@ -136,7 +152,7 @@ internal sealed class DevOptions {
 
         var views = new List<string>();
         string viewList = ReadValue(arguments, "-weather-views");
-        foreach (string view in viewList?.Split(',') ?? AllViews) {
+        foreach (string view in viewList?.Split(',') ?? DefaultViews) {
             string name = view.Trim().ToLowerInvariant();
             if (Array.IndexOf(AllViews, name) < 0) {
                 Debug.LogWarning($"{WeatherMod.LogPrefix}Unknown capture view '{view}'; expected one of "
@@ -169,7 +185,9 @@ internal sealed class DevOptions {
                 ReadValue(arguments, "-weather-skip")?.Split(',') ?? Array.Empty<string>(),
                 StringComparer.OrdinalIgnoreCase
             ),
-            isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0
+            isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0,
+            isMeasuringPerformance: Array.IndexOf(arguments, "-weather-perf") >= 0,
+            treeWindQuality: ReadValue(arguments, "-weather-tree-wind")?.Trim().ToUpperInvariant()
         );
     }
 

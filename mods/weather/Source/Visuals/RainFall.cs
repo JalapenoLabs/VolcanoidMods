@@ -44,7 +44,7 @@ internal sealed class RainFall : IDisposable {
     readonly ParticleSystem spray;
     readonly Material sprayMaterial;
 
-    public RainFall(Transform parent, StormTextures textures) {
+    public RainFall(Transform parent, StormTextures textures, ShelterVolumes shelters) {
         dropMaterial = GameMaterials.CloneLitSmoke("rain");
         if (dropMaterial == null) {
             throw new InvalidOperationException("the game has no lit smoke material to build on");
@@ -93,8 +93,17 @@ internal sealed class RainFall : IDisposable {
             ParticleSystemSubEmitterProperties.InheritNothing,
             SprayChance
         );
+        // However the drops get in (the far rain has no collision, the near rain's is approximate), none survive inside
+        // a cabin or a shelter.
+        shelters.Guard(nearDrops);
+        shelters.Guard(farDrops);
         nearDrops.Play();
         farDrops.Play();
+    }
+
+    /// <summary>For developer logs: drops inside sheltered spaces right now, which should be none.</summary>
+    public int CountDropsInside(ShelterVolumes shelters) {
+        return shelters.CountInside(nearDrops) + shelters.CountInside(farDrops);
     }
 
     ParticleSystem CreateDrops(

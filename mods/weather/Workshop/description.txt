@@ -27,7 +27,7 @@ Lightning only does damage when the host has the mod (the game applies damage on
 [*]Loading a save made without the mod shows the game's mod-mismatch dialog: choose [b]Continue[/b] to play it with the weather on.
 [*]The weather runs on real time: storms keep coming while the game is paused, and a save does not remember its weather.
 [*]Armour soaks up a strike like any other hit, and being under a roof keeps you safe from lightning entirely.
-[*]No settings: the storm schedule is fixed.
+[*]A [b]Weather[/b] volume slider in the game's audio options; the storm schedule itself is fixed.
 [/list]
 [h2]Links[/h2]
 [list]
