@@ -27,7 +27,8 @@ internal sealed class CelestialSky : ICameraEffect, IDisposable {
     readonly StarField stars;
     readonly Moon moon;
     readonly HorizonHaze haze;
-    readonly List<MeshRenderer> renderers = new List<MeshRenderer>();
+    /// <summary>Everything beyond the air, which ash and cloud hide: Milky Way, stars and moon. Not the haze.</summary>
+    readonly List<MeshRenderer> skyRenderers = new List<MeshRenderer>();
     int lastAnimatedFrame = -1;
     bool isApplied;
 
@@ -45,46 +46,51 @@ internal sealed class CelestialSky : ICameraEffect, IDisposable {
         float elapsedMilliseconds = (Time.realtimeSinceStartup - started) * 1000;
         Debug.Log($"{DayNightCycleMod.LogPrefix}Night sky generated in {elapsedMilliseconds:0} ms");
 
-        renderers.Add(milkyWay.Renderer);
-        renderers.AddRange(stars.Renderers);
-        renderers.AddRange(moon.Renderers);
-        renderers.Add(haze.Renderer);
+        skyRenderers.Add(milkyWay.Renderer);
+        skyRenderers.AddRange(stars.Renderers);
+        skyRenderers.AddRange(moon.Renderers);
     }
 
     public void Apply(in NightFrame frame, Camera camera, float surface) {
-        // Stars come out once the dusk sky has gone dark, fade early in the dawn, and hide behind eruption ash.
-        float visibility = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.5f, 1.0f, frame.Darkness))
-            * surface
-            * frame.SkyClarity;
-        if (visibility <= 0.001f) {
+        // The night comes out once the dusk sky has gone dark, and fades early in the dawn.
+        float nightVisibility = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.5f, 1.0f, frame.Darkness)) * surface;
+        if (nightVisibility <= 0.001f) {
             return;
-        }
-
-        if (lastAnimatedFrame != Time.frameCount) {
-            stars.Twinkle(Time.time);
-            moon.Update(in frame, visibility);
-            lastAnimatedFrame = Time.frameCount;
         }
 
         Transform rootTransform = root.transform;
         rootTransform.position = camera.transform.position;
         rootTransform.localScale = Vector3.one * (camera.farClipPlane * FarPlaneFraction);
-        starSphere.localRotation = frame.StarRotation;
 
-        milkyWay.SetVisibility(visibility);
-        stars.SetVisibility(visibility);
-        haze.SetColor(frame.FogColor, visibility);
-        foreach (MeshRenderer renderer in renderers) {
+        // The haze is air, in front of any ash or cloud, so it stays: it keeps the horizon's glow under a veiled sky.
+        haze.SetColor(frame.FogColor, nightVisibility);
+        haze.Renderer.enabled = true;
+        isApplied = true;
+
+        float skyVisibility = nightVisibility * frame.SkyClarity;
+        if (skyVisibility <= 0.001f) {
+            return;
+        }
+
+        if (lastAnimatedFrame != Time.frameCount) {
+            stars.Twinkle(Time.time);
+            moon.Update(in frame, skyVisibility);
+            lastAnimatedFrame = Time.frameCount;
+        }
+        starSphere.localRotation = frame.StarRotation;
+        milkyWay.SetVisibility(skyVisibility);
+        stars.SetVisibility(skyVisibility);
+        foreach (MeshRenderer renderer in skyRenderers) {
             renderer.enabled = true;
         }
-        isApplied = true;
     }
 
     public void Restore() {
         if (!isApplied) {
             return;
         }
-        foreach (MeshRenderer renderer in renderers) {
+        haze.Renderer.enabled = false;
+        foreach (MeshRenderer renderer in skyRenderers) {
             renderer.enabled = false;
         }
         isApplied = false;

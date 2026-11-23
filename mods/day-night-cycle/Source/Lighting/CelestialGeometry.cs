@@ -54,8 +54,8 @@ internal sealed class CelestialGeometry {
     /// <summary>The highest point of the sun's and moon's path.</summary>
     public Vector3 HighestDirection => highestDirection;
 
-    /// <param name="skyClarity">See <see cref="NightFrame.SkyClarity"/>.</param>
-    public NightFrame Evaluate(CycleSample sample, float skyClarity) {
+    /// <param name="veil">See <see cref="NightFrame.Veil"/>.</param>
+    public NightFrame Evaluate(CycleSample sample, SkyVeil veil) {
         Vector3 sunPathDirection = PathDirection(sample.SunPathTurns);
 
         // While the sun is up, its path position runs from 0 at sunrise to 1 at sunset.
@@ -72,7 +72,7 @@ internal sealed class CelestialGeometry {
             sunPathDirection,
             PathDirection(sample.MoonPathTurns),
             StarRotation(sample.StarTurns),
-            skyClarity
+            veil
         );
     }
 

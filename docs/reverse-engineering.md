@@ -37,6 +37,14 @@ docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -v $SCRATCH/pydeps:/deps \
 MonoBehaviour script references point into `Common.bundle`, so in the island bundle alone a behaviour has to be
 recognised by its serialized field names. Loading `Common.bundle` takes a few minutes and around 20 GB of memory.
 
+A few objects can be read out of `Common.bundle` without loading it, because it stores its data uncompressed (two
+blocks, compression 0). Parse the UnityFS block table, hand UnityPy's `SerializedFile` a seekable stream over the
+serialized node (the directory node with flag 4; the `.resS` and `.resource` nodes hold texture and audio payloads),
+and set `UnityPy.config.FALLBACK_UNITY_VERSION = "6000.0.75f1"`, since the bundle strips the engine version. Its
+metadata (1,241,315 objects) and a few dozen objects then cost a few hundred megabytes. A texture's pixels sit in the
+`.resS` node at its `m_StreamData.offset`; a cubemap stores each face's whole mip chain in turn. In the island
+scene, a reference with `m_FileID` 1 points into this file.
+
 ## The island's lighting, as found
 
 - **`RenderSettings.ambientProbe` does not round-trip.** The getter returns the stored probe multiplied by the
@@ -61,6 +69,36 @@ recognised by its serialized field names. Loading `Common.bundle` takes a few mi
   effect for that camera.
 - Shaders without fog that ship with the game: Unity's built-in `Sprites/Default` and `UI/Default` (in
   `UnityBuiltInShaders.bundle`), and the game's `Sprites/Camera Facing`.
+
+## The eruption timeline, as found
+
+`IslandTimeHandler` evaluates every timeline curve each frame at the current state's index plus its normalized time:
+0 `Normal` (680 s), 1 `Beforeblast` (180 s), 2 `Eruption` (22 s), 3 `Afterblast` (460 s), 4 `Recover` (180 s). Every
+length but the eruption's is divided by the save's `EruptionFrequency`, so a whole cycle takes about 25 minutes at a
+frequency of 1. A save records the state and its normalized time in `DataIsland`.
+
+- **Sun** (`Sun:m_Intensity`): 1.8 until 2.58, easing to 0.5 by 3.0, held at 0.5 to 3.62, back to 1.8 by 3.99.
+- **Skybox cubemaps:** `Normal` until 2.59, gone by 2.77; `Afterblast` from 2.68, fading out from 4.0 to 4.48;
+  `Recover` rising from 4.02 to 4.36 and fading back out by the cycle's end; `Normal` again from 4.75 to 4.99.
+  `Afterblast` is a grey overcast roughly two thirds as bright as `Normal`; `Recover` is brighter than either.
+- **Island-wide volumes** (all global, on `MainZone`):
+
+| Volume (priority) | Weight over the timeline | Fog colour, sky cover (alpha), density |
+| --- | --- | --- |
+| `Default` (0) | 1, except 0 from 2.94 to 4.59 | sky blue, 0, 0.0013 |
+| `DefaultGray` (1) | 1 from 2.1 to 4.6 | grey, 0, colour only |
+| `LightDust` (2) | 1 from 2.36 to 4.6 | grey 0.6, 1, 0.0001 |
+| `HeavyDust` (3) | 1 from 2.76 to 3.32, gone by 3.84 | grey 0.6, 1, 0.01 |
+| `SuperDust` (4) | 1 from 2.79 to 3.06, gone by 3.44 | grey 0.38, 1, 0.18 |
+
+The dust volumes grade the image exactly as `Default` does (post exposure 0.5, ACES tonemapping, white balance 4).
+So by day an eruption turns the whole sky a flat, light grey for about ten minutes at a frequency of 1, with the sun
+under a third for about five of them; the ambient probe never changes.
+
+None of this depends on where the player stands. The only local volumes on the surface are the lava's
+(`CrackLavaPostProcess`, `LavaPoolSurfacePostProcess`: orange fog covering the sky, density 0.001, a red vignette,
+reaching 30 to 115 m from the lava) and `BlastWaveSurface`, which fades out over 4 seconds once the eruption state
+ends.
 
 ## The island's scenery and drillships, as found
 

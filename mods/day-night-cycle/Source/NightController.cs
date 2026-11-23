@@ -49,6 +49,15 @@ internal sealed class NightController : MonoBehaviour {
     /// </summary>
     static readonly int CloudCoverId = Shader.PropertyToID("_JalapenoLabs_CloudCover");
 
+    /// <summary>How far the sky clarity must move before the log reports it again.</summary>
+    const float ClarityLogStep = 0.1f;
+
+    /// <summary>
+    /// The clarity that counts as a clear sky. The game's noon sun is a float a hair under its nominal 1.8, so a
+    /// clear sky reads 0.99999 rather than 1.
+    /// </summary>
+    const float ClearClarity = 0.999f;
+
     readonly List<ICameraEffect> effects = new List<ICameraEffect>();
     readonly Dictionary<Camera, CameraState> cameras = new Dictionary<Camera, CameraState>();
 
@@ -59,6 +68,8 @@ internal sealed class NightController : MonoBehaviour {
     NightFrame frame;
     Camera renderingCamera;
     Period? lastPeriod;
+    /// <summary>The sky clarity the log last reported. A game loaded under ash logs its first frame.</summary>
+    float loggedClarity = 1;
     /// <summary>The developer capture rig, while capturing. Its camera lift wraps the night's camera changes.</summary>
     CaptureDirector captureDirector;
 
@@ -109,14 +120,17 @@ internal sealed class NightController : MonoBehaviour {
     void Update() {
         frame = SampleFrame();
         LogPeriodChange();
+        LogClarityChange();
     }
 
     NightFrame SampleFrame() {
         // Read in Update, after the night has put the sun back: this is the eruption timeline's own brightness.
-        float skyClarity = Mathf.Clamp01(sun.intensity / NightLook.GameSunIntensity);
-        // Storm cloud hides the night sky and its moonlight, as eruption ash does.
-        skyClarity = Mathf.Min(skyClarity, 1 - Mathf.Clamp01(Shader.GetGlobalFloat(CloudCoverId)));
-        return geometry.Evaluate(CycleSchedule.Sample(clock.Now), skyClarity);
+        SkyVeil veil = SkyVeil.Measure(
+            sun.intensity,
+            NightLook.GameSunIntensity,
+            Shader.GetGlobalFloat(CloudCoverId)
+        );
+        return geometry.Evaluate(CycleSchedule.Sample(clock.Now), veil);
     }
 
     /// <summary>
@@ -249,6 +263,28 @@ internal sealed class NightController : MonoBehaviour {
         Debug.Log(
             $"{DayNightCycleMod.LogPrefix}{period} (cycle {frame.Sample.CycleNumber}, "
             + $"minute {frame.Sample.CycleSeconds / 60:0.0}, {frame.Sample.MoonPhaseName})"
+        );
+    }
+
+    /// <summary>
+    /// Logs the sky clarity in steps as ash or storm cloud comes and goes, with what drove it, so a player's log shows
+    /// why a night looked the way it did.
+    /// </summary>
+    void LogClarityChange() {
+        float clarity = frame.SkyClarity;
+        bool hasCleared = clarity > ClearClarity && loggedClarity <= ClearClarity;
+        if (Mathf.Abs(clarity - loggedClarity) < ClarityLogStep && !hasCleared) {
+            return;
+        }
+        loggedClarity = clarity;
+        IslandState islandState = Island.CurrentState;
+        string islandStateName = islandState != null
+            ? islandState.name
+            : "unknown";
+        Debug.Log(
+            $"{DayNightCycleMod.LogPrefix}Sky clarity {clarity:0.00}: sun {sun.intensity:0.00} of "
+            + $"{NightLook.GameSunIntensity:0.00}, cloud cover {Shader.GetGlobalFloat(CloudCoverId):0.00}, "
+            + $"island {islandStateName}"
         );
     }
 

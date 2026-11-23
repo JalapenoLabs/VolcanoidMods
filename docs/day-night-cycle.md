@@ -102,12 +102,28 @@ round the horizon that fades stars and a setting moon into the haze.
 
 ### Eruptions and storm clouds
 
-The game dims its sun under eruption ash. The night reads that brightness against the usual 1.8 as sky clarity and
-dims the moonlight, stars and moon by it, so ash hides the night sky too, without the mod knowing about eruptions.
+Two things can stand between the island and the night sky, and the night reads both without knowing where they come
+from (`Cycle/SkyVeil.cs`):
 
-A weather mod may publish its cloud cover as the global shader value `_JalapenoLabs_CloudCover`, from 0 (clear) to 1
-(overcast). The night caps its sky clarity at one minus that cover, so storm clouds hide the stars, moon and moonlight.
-Rain & Thunderstorms publishes it (`docs/weather.md`); with no weather mod the value reads 0 and changes nothing.
+- **Eruption ash.** The game dims its sun under ash: through the first part of Afterblast the eruption timeline holds
+  it at 0.5 of its usual 1.8 (see [reverse-engineering.md](reverse-engineering.md#the-eruption-timeline-as-found)).
+  The night reads that ratio as sky clarity.
+- **Storm cloud.** A weather mod may publish its cloud cover as the global shader value `_JalapenoLabs_CloudCover`,
+  from 0 (clear) to 1 (overcast), and the night caps its sky clarity at one minus that cover. Rain & Thunderstorms
+  publishes it (`docs/weather.md`); with no weather mod the value reads 0 and changes nothing.
+
+Both hide what lies beyond the air: the stars, the Milky Way, the moon's disc and halo, and the moon's direct light.
+Only cloud also dims the air beneath it: the moon's glow in the fog and horizon haze, and the ambient light the moon
+adds. The game paints its ash as bright dust that scatters the light it stops (by day its sun falls below a third,
+yet the sky turns a light grey and the ambient light holds), so under ash the night keeps its sky glow and its
+horizon haze while the moon and stars fade behind it. Storm cloud is dark, and takes the glow with it.
+
+The eruption's dust still thickens the night: its volumes raise the fog's density from the clear 0.0013 to 0.01, and
+to 0.18 at the eruption's height, and the night's fog colour fills that dust as it fills clear air. A whole eruption
+cycle takes about 25 minutes divided by the save's eruption frequency, so most nights hold a few minutes of ash.
+
+The night logs its sky clarity whenever it moves by a tenth, with the sun, the cloud cover and the island's eruption
+state behind it.
 
 ## Tuning
 
