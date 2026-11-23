@@ -113,10 +113,14 @@ from (`Cycle/SkyVeil.cs`):
   publishes it (`docs/weather.md`); with no weather mod the value reads 0 and changes nothing.
 
 Both hide what lies beyond the air: the stars, the Milky Way, the moon's disc and halo, and the moon's direct light.
-Only cloud also dims the air beneath it: the moon's glow in the fog and horizon haze, and the ambient light the moon
+Only cloud also dims the air beneath it: the horizon haze, the moon's glow in the fog, and the ambient light the moon
 adds. The game paints its ash as bright dust that scatters the light it stops (by day its sun falls below a third,
 yet the sky turns a light grey and the ambient light holds), so under ash the night keeps its sky glow and its
 horizon haze while the moon and stars fade behind it. Storm cloud is dark, and takes the glow with it.
+
+A weather mod's own sun dimming therefore reads as ash, and only its published cover darkens the air, so a weather mod
+publishes a cover at least as thick as its sun dimming. Rain & Thunderstorms does: at every moment of a storm its
+cover veils more of the sky than its dimmed sun does.
 
 The eruption's dust still thickens the night: its volumes raise the fog's density from the clear 0.0013 to 0.01, and
 to 0.18 at the eruption's height, and the night's fog colour fills that dust as it fills clear air. A whole eruption

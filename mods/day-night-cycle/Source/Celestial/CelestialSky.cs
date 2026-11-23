@@ -52,9 +52,11 @@ internal sealed class CelestialSky : ICameraEffect, IDisposable {
     }
 
     public void Apply(in NightFrame frame, Camera camera, float surface) {
-        // The night comes out once the dusk sky has gone dark, and fades early in the dawn.
+        // The night comes out once the dusk sky has gone dark, and fades early in the dawn. The haze is the air's own
+        // glow, so storm cloud darkens it but ash does not (see SkyVeil): under ash it keeps the horizon glowing.
         float nightVisibility = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.5f, 1.0f, frame.Darkness)) * surface;
-        if (nightVisibility <= 0.001f) {
+        float hazeVisibility = nightVisibility * (float)frame.Veil.GlowClarity;
+        if (hazeVisibility <= 0.001f) {
             return;
         }
 
@@ -62,11 +64,11 @@ internal sealed class CelestialSky : ICameraEffect, IDisposable {
         rootTransform.position = camera.transform.position;
         rootTransform.localScale = Vector3.one * (camera.farClipPlane * FarPlaneFraction);
 
-        // The haze is air, in front of any ash or cloud, so it stays: it keeps the horizon's glow under a veiled sky.
-        haze.SetColor(frame.FogColor, nightVisibility);
+        haze.SetColor(frame.FogColor, hazeVisibility);
         haze.Renderer.enabled = true;
         isApplied = true;
 
+        // Never more than the haze's visibility: whatever veils the air veils the sky beyond it too.
         float skyVisibility = nightVisibility * frame.SkyClarity;
         if (skyVisibility <= 0.001f) {
             return;
