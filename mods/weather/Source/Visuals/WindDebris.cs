@@ -10,8 +10,8 @@ using UnityEngine.Rendering;
 namespace JalapenoLabs.Weather.Visuals;
 
 /// <summary>
-/// What the wind carries past the player: leaves torn from the trees around them, mostly in the gusts, and low sheets
-/// of spray that each gust drives racing across the ground.
+/// What the wind carries past the player: leaves torn from the trees around them, mostly in the gusts, and long, low
+/// wisps of spray that each gust drives racing across the ground.
 ///
 /// The island's trees cannot sway (see <see cref="StormWind"/>), so their leaves show the wind instead: each is torn
 /// from the crown of a real tree near the camera and tumbles away downwind, so a gust visibly strips the trees. Out on
@@ -19,7 +19,7 @@ namespace JalapenoLabs.Weather.Visuals;
 /// </summary>
 internal sealed class WindDebris : IDisposable {
     const float MostLeavesPerSecond = 60;
-    const float MostSheetsPerSecond = 6;
+    const float MostWispsPerSecond = 12;
 
     /// <summary>Leaves are torn from the crowns of trees this close to the camera.</summary>
     const float LeafReach = 70;
@@ -35,9 +35,9 @@ internal sealed class WindDebris : IDisposable {
 
     readonly GameObject host;
     readonly ParticleSystem leaves;
-    readonly ParticleSystem sheets;
+    readonly ParticleSystem wisps;
     readonly Material leafMaterial;
-    readonly Material sheetMaterial;
+    readonly Material wispMaterial;
     bool isClear = true;
     List<TerrainTrees.Tree> nearbyTrees = new List<TerrainTrees.Tree>();
     Vector3 surveyedAt;
@@ -47,8 +47,8 @@ internal sealed class WindDebris : IDisposable {
 
     public WindDebris(Transform parent, StormTextures textures, ShelterVolumes shelters) {
         leafMaterial = GameMaterials.CloneLitSmoke("wind-blown leaves");
-        sheetMaterial = GameMaterials.CloneLitSmoke("wind-blown spray");
-        if (leafMaterial == null || sheetMaterial == null) {
+        wispMaterial = GameMaterials.CloneLitSmoke("wind-blown spray");
+        if (leafMaterial == null || wispMaterial == null) {
             throw new InvalidOperationException("the game has no lit smoke material to build on");
         }
         leafMaterial.SetTexture(GameMaterials.BaseMapId, textures.Leaves);
@@ -61,16 +61,17 @@ internal sealed class WindDebris : IDisposable {
         if (leafMaterial.HasProperty(CullId)) {
             leafMaterial.SetFloat(CullId, (float)CullMode.Off);
         }
-        sheetMaterial.SetTexture(GameMaterials.BaseMapId, textures.CloudAlbedo);
-        sheetMaterial.SetTexture(GameMaterials.BumpMapId, textures.CloudNormals);
-        sheetMaterial.SetColor(GameMaterials.BaseColorId, new Color(1.2f, 1.22f, 1.28f, 0.16f));
+        wispMaterial.SetTexture(GameMaterials.BaseMapId, textures.WindWisp);
+        wispMaterial.SetTexture(GameMaterials.BumpMapId, null);
+        // Faint: a wisp is air with water in it, seen mostly where several cross.
+        wispMaterial.SetColor(GameMaterials.BaseColorId, new Color(1.25f, 1.28f, 1.33f, 0.14f));
 
         host = new GameObject("Weather.WindDebris") { layer = Layers.MainZone };
         host.transform.SetParent(parent, false);
         leaves = CreateLeaves();
-        sheets = CreateSheets();
+        wisps = CreateWisps();
         shelters.Guard(leaves);
-        shelters.Guard(sheets);
+        shelters.Guard(wisps);
     }
 
     ParticleSystem CreateLeaves() {
@@ -137,29 +138,27 @@ internal sealed class WindDebris : IDisposable {
         return system;
     }
 
-    /// <summary>Long, low veils of spray that a gust drives across the ground.</summary>
-    ParticleSystem CreateSheets() {
-        ParticleSystem system = CreateEmitter("Spray", 150);
+    /// <summary>
+    /// Long, faint wisps of spray that a gust drives low across the ground: each a band of fine streaks stretched along
+    /// its own motion, so it reads as air full of water rushing past, and each lives several seconds and fades slowly,
+    /// so wisps drift through rather than blink in and out.
+    /// </summary>
+    ParticleSystem CreateWisps() {
+        ParticleSystem system = CreateEmitter("Spray", 250);
         ParticleSystem.MainModule main = system.main;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(2, 3.2f);
-        // Far wider than tall: a racing streak of mist, not a puff.
-        main.startSize3D = true;
-        main.startSizeX = new ParticleSystem.MinMaxCurve(9, 16);
-        main.startSizeY = new ParticleSystem.MinMaxCurve(2, 4);
-        main.startSizeZ = 1;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(3, 5);
+        // Its thickness; its length comes from its speed and the renderer's stretch.
+        main.startSize = new ParticleSystem.MinMaxCurve(1.5f, 3.5f);
         ParticleSystem.ColorOverLifetimeModule color = system.colorOverLifetime;
         color.enabled = true;
-        color.color = FadeInAndOut(0.25f, 0.6f);
-        ParticleSystem.TextureSheetAnimationModule sheet = system.textureSheetAnimation;
-        sheet.enabled = true;
-        sheet.numTilesX = Art.WeatherArt.CloudAtlasTiles;
-        sheet.numTilesY = Art.WeatherArt.CloudAtlasTiles;
-        sheet.frameOverTime = new ParticleSystem.MinMaxCurve(0);
-        sheet.startFrame = new ParticleSystem.MinMaxCurve(0, 0.9999f);
+        color.color = FadeInAndOut(0.3f, 0.55f);
 
         var renderer = system.GetComponent<ParticleSystemRenderer>();
-        renderer.sharedMaterial = sheetMaterial;
-        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.sharedMaterial = wispMaterial;
+        renderer.renderMode = ParticleSystemRenderMode.Stretch;
+        // Several times longer than thick, longer still the harder it blows.
+        renderer.lengthScale = 4;
+        renderer.velocityScale = 0.35f;
         renderer.sortMode = ParticleSystemSortMode.Distance;
         GameMaterials.UseLitSmokeStreams(renderer);
         return system;
@@ -209,7 +208,7 @@ internal sealed class WindDebris : IDisposable {
 
     /// <summary>For developer logs: what the wind has in the air.</summary>
     public string Describe() {
-        return $"{nearbyTrees.Count} trees near, {leaves.particleCount} leaves, {sheets.particleCount} spray sheets";
+        return $"{nearbyTrees.Count} trees near, {leaves.particleCount} leaves, {wisps.particleCount} spray wisps";
     }
 
     /// <param name="wind">The wind's velocity this moment, gusts included, in metres per second.</param>
@@ -222,11 +221,11 @@ internal sealed class WindDebris : IDisposable {
         if (exposure < 0.5f) {
             if (!isClear) {
                 leaves.Clear();
-                sheets.Clear();
+                wisps.Clear();
                 isClear = true;
             }
             leafBudget = 0;
-            SetRate(sheets, 0);
+            SetRate(wisps, 0);
             return;
         }
         isClear = false;
@@ -241,10 +240,10 @@ internal sealed class WindDebris : IDisposable {
         TearLeaves(eye);
         SetVelocity(leaves.velocityOverLifetime, wind * 0.85f);
 
-        SetRate(sheets, MostSheetsPerSecond * gust * strength * (0.4f + 0.6f * rain) * exposure);
+        SetRate(wisps, MostWispsPerSecond * gust * strength * (0.4f + 0.6f * rain) * exposure);
         float ground = GroundBelow(eye);
-        PlaceSource(sheets, new Vector3(eye.x, ground + 1.5f, eye.z) + upwind * UpwindStart, new Vector3(60, 2, 60));
-        SetVelocity(sheets.velocityOverLifetime, wind);
+        PlaceSource(wisps, new Vector3(eye.x, ground + 2, eye.z) + upwind * UpwindStart, new Vector3(70, 3, 70));
+        SetVelocity(wisps.velocityOverLifetime, wind);
     }
 
     /// <summary>Leaves torn from the crowns of the trees around the camera, as many as the wind has earned.</summary>
@@ -314,6 +313,6 @@ internal sealed class WindDebris : IDisposable {
     }
 
     public void Dispose() {
-        GameMaterials.Destroy(host, leafMaterial, sheetMaterial);
+        GameMaterials.Destroy(host, leafMaterial, wispMaterial);
     }
 }

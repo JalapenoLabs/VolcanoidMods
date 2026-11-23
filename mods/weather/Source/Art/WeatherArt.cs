@@ -318,6 +318,29 @@ public static class WeatherArt {
     }
 
     /// <summary>
+    /// A wisp of wind-driven spray, for the gusts: a soft band of fine streaks running its length (the particle is
+    /// stretched along its motion, which runs along the image's height), fading in at its head and trailing away
+    /// behind. White; the material sets its strength.
+    /// </summary>
+    public static ArtImage WindWisp(ulong seed, int width = 64, int height = 256) {
+        var image = new ArtImage(width, height);
+        for (int y = 0; y < height; y++) {
+            float along = (y + 0.5f) / height;
+            // A short rise at one end and a long trailing fade at the other.
+            float taper = SmoothStep(0, 0.2f, along) * SmoothStep(1, 0.45f, along);
+            for (int x = 0; x < width; x++) {
+                float across = (x + 0.5f) / width * 2 - 1;
+                float band = (float)Math.Exp(-Math.Pow(across / 0.55f, 2));
+                // Noise stretched far along the wisp reads as fine parallel streaks of spray.
+                float streaks = SmoothStep(0.4f, 0.8f, Noise.Fractal(seed, across * 7 + 11, along * 1.3f + 3, 3));
+                float alpha = band * taper * (0.3f + 0.7f * streaks);
+                image.Set(x, y, 1, 1, 1, alpha);
+            }
+        }
+        return image;
+    }
+
+    /// <summary>
     /// Leaves torn off by the wind, for the gust debris: pointed ovals with a slightly toothed edge, a stalk, and a
     /// darker midrib and veins. White, so each particle tints its own leaf green, yellow or brown.
     /// </summary>
