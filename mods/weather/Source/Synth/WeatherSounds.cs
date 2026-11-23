@@ -21,13 +21,12 @@ public readonly struct SoundBuffer {
 }
 
 /// <summary>
-/// Every sound of the weather, synthesised from noise.
+/// The weather's synthesised sounds: wind and thunder. (The rain is recorded; see Recordings/CREDITS.md.)
 ///
-/// Rain is a bed of pink noise (rain hitting everything at once) under thousands of individual drops: sharp clicks on
-/// hard ground and small rising "plinks" where drops land in water. On a roof each drop rings the panel it hits.
-/// Thunder is brown noise behind a falling low-pass filter, swelling in several rolls as the sound arrives from
-/// different parts of the bolt; a close strike opens with a ripping crack. The loops crossfade their end into their
-/// start, so they repeat without a seam.
+/// Wind is band-passed brown noise whose pitch and strength wander, with a whistle in the gusts. Thunder is brown noise
+/// behind a falling low-pass filter, swelling in several rolls as the sound arrives from different parts of the bolt;
+/// a close strike opens with a ripping crack. The wind loop crossfades its end into its start, so it repeats without a
+/// seam.
 ///
 /// Each sound is drawn from a fixed seed, so it is the same in every game.
 ///
@@ -38,54 +37,6 @@ public static class WeatherSounds {
 
     /// <summary>How much of a loop's end is blended into its start to hide the seam.</summary>
     const float LoopCrossfadeSeconds = 0.5f;
-
-    /// <summary>Heavy rain: a roar of noise and a dense hail of drops.</summary>
-    public static SoundBuffer Downpour(ulong seed) {
-        return RainLoop(seed, 8, dropsPerSecond: 1100, bodyLevel: 0.6f, plinkShare: 0.25f);
-    }
-
-    /// <summary>Light rain: individual drops pattering, over a whisper of noise.</summary>
-    public static SoundBuffer Patter(ulong seed) {
-        return RainLoop(seed, 8, dropsPerSecond: 160, bodyLevel: 0.1f, plinkShare: 0.4f);
-    }
-
-    /// <summary>Rain heard from inside: drops drumming on the panels overhead, low and soft.</summary>
-    public static SoundBuffer Roof(ulong seed) {
-        var random = new StormRandom(seed);
-        int frames = (int)(8f * SampleRate);
-        int total = frames + (int)(LoopCrossfadeSeconds * SampleRate);
-        var left = new float[total];
-        var right = new float[total];
-
-        var brownLeft = new BrownNoise();
-        var brownRight = new BrownNoise();
-        var lowPassLeft = new Biquad(Biquad.Kind.LowPass, 500, 0.7f, SampleRate);
-        var lowPassRight = new Biquad(Biquad.Kind.LowPass, 500, 0.7f, SampleRate);
-        for (int index = 0; index < total; index++) {
-            left[index] = lowPassLeft.Process(brownLeft.Next(ref random)) * 0.5f;
-            right[index] = lowPassRight.Process(brownRight.Next(ref random)) * 0.5f;
-        }
-
-        // Each drop rings one of the roof panel's modes, damped quickly by the panel's stiffening.
-        float[] panelModes = { 380, 520, 760, 1100, 1450 };
-        int dropCount = 520 * total / SampleRate;
-        for (int drop = 0; drop < dropCount; drop++) {
-            int start = (int)(random.NextFloat() * total);
-            float loudness = 0.05f + 0.6f * (float)Math.Pow(random.NextFloat(), 2.5);
-            float frequency = panelModes[(int)(random.NextFloat() * panelModes.Length)] * random.Range(0.9f, 1.1f);
-            float decaySeconds = random.Range(0.025f, 0.07f);
-            float pan = random.NextFloat();
-            int length = Math.Min(total - start, (int)(decaySeconds * 5 * SampleRate));
-            double phaseStep = 2 * Math.PI * frequency / SampleRate;
-            for (int offset = 0; offset < length; offset++) {
-                float time = offset / (float)SampleRate;
-                float value = (float)Math.Sin(phaseStep * offset) * (float)Math.Exp(-time / decaySeconds) * loudness;
-                left[start + offset] += value * (float)Math.Sqrt(1 - pan);
-                right[start + offset] += value * (float)Math.Sqrt(pan);
-            }
-        }
-        return Finish(left, right, frames, 0.8f);
-    }
 
     /// <summary>Gusting wind: band-passed brown noise whose pitch and strength wander.</summary>
     public static SoundBuffer Wind(ulong seed) {
@@ -216,93 +167,6 @@ public static class WeatherSounds {
         }
     }
 
-    static SoundBuffer RainLoop(ulong seed, float seconds, int dropsPerSecond, float bodyLevel, float plinkShare) {
-        var random = new StormRandom(seed);
-        int frames = (int)(seconds * SampleRate);
-        int total = frames + (int)(LoopCrossfadeSeconds * SampleRate);
-        var left = new float[total];
-        var right = new float[total];
-
-        // The bed: pink noise without its rumble and its harshest top, partly shared between the ears for width.
-        var shared = new PinkNoise();
-        var pinkLeft = new PinkNoise();
-        var pinkRight = new PinkNoise();
-        var highPassLeft = new Biquad(Biquad.Kind.HighPass, 250, 0.7f, SampleRate);
-        var highPassRight = new Biquad(Biquad.Kind.HighPass, 250, 0.7f, SampleRate);
-        var lowPassLeft = new Biquad(Biquad.Kind.LowPass, 7000, 0.7f, SampleRate);
-        var lowPassRight = new Biquad(Biquad.Kind.LowPass, 7000, 0.7f, SampleRate);
-        for (int index = 0; index < total; index++) {
-            float common = shared.Next(ref random);
-            float leftNoise = 0.6f * common + 0.4f * pinkLeft.Next(ref random);
-            float rightNoise = 0.6f * common + 0.4f * pinkRight.Next(ref random);
-            left[index] = lowPassLeft.Process(highPassLeft.Process(leftNoise)) * bodyLevel;
-            right[index] = lowPassRight.Process(highPassRight.Process(rightNoise)) * bodyLevel;
-        }
-
-        int dropCount = dropsPerSecond * total / SampleRate;
-        for (int drop = 0; drop < dropCount; drop++) {
-            int start = (int)(random.NextFloat() * total);
-            // Most drops land far off and are faint; a few land close.
-            float loudness = 0.04f + 0.7f * (float)Math.Pow(random.NextFloat(), 3);
-            float pan = random.NextFloat();
-            float leftGain = (float)Math.Sqrt(1 - pan) * loudness;
-            float rightGain = (float)Math.Sqrt(pan) * loudness;
-            if (random.NextFloat() < plinkShare) {
-                AddPlink(ref random, left, right, start, leftGain, rightGain);
-            } else {
-                AddClick(ref random, left, right, start, leftGain, rightGain);
-            }
-        }
-        return Finish(left, right, frames, 0.8f);
-    }
-
-    /// <summary>A drop landing in water: the bubble it traps rings with a quickly rising pitch.</summary>
-    static void AddPlink(
-        ref StormRandom random,
-        float[] left,
-        float[] right,
-        int start,
-        float leftGain,
-        float rightGain
-    ) {
-        float frequency = random.Range(1800, 5000);
-        float durationSeconds = random.Range(0.008f, 0.02f);
-        int length = Math.Min(left.Length - start, (int)(durationSeconds * SampleRate));
-        double phase = 0;
-        for (int offset = 0; offset < length; offset++) {
-            float progress = offset / (float)length;
-            phase += 2 * Math.PI * frequency * (1 + 0.4f * progress) / SampleRate;
-            float attack = Math.Min(1, offset / (0.0003f * SampleRate));
-            float value = (float)Math.Sin(phase) * attack * (float)Math.Exp(-progress * 4);
-            left[start + offset] += value * leftGain;
-            right[start + offset] += value * rightGain;
-        }
-    }
-
-    /// <summary>A drop hitting ground or leaves: a tiny band-limited burst of noise.</summary>
-    static void AddClick(
-        ref StormRandom random,
-        float[] left,
-        float[] right,
-        int start,
-        float leftGain,
-        float rightGain
-    ) {
-        var band = new Biquad(Biquad.Kind.BandPass, random.Range(2000, 7000), 1.2f, SampleRate);
-        float decaySeconds = random.Range(0.001f, 0.004f);
-        int length = Math.Min(left.Length - start, (int)(decaySeconds * 6 * SampleRate));
-        for (int offset = 0; offset < length; offset++) {
-            float time = offset / (float)SampleRate;
-            float value = band.Process(Dsp.White(ref random)) * (float)Math.Exp(-time / decaySeconds) * 2.5f;
-            left[start + offset] += value * leftGain;
-            right[start + offset] += value * rightGain;
-        }
-    }
-
-    /// <summary>
-    /// Folds a loop's extra tail into its start (an equal-power crossfade, right for noise), so playback runs from the
-    /// last sample straight back into the first without a seam, then normalises and interleaves it.
-    /// </summary>
     static SoundBuffer Finish(float[] left, float[] right, int frames, float peak) {
         int crossfade = left.Length - frames;
         for (int index = 0; index < crossfade; index++) {

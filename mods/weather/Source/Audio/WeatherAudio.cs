@@ -7,24 +7,41 @@ using System.IO;
 using Tasks = System.Threading.Tasks;
 using JalapenoLabs.Weather.Synth;
 using UnityEngine;
+using UnityEngine.Networking;
 using Object = UnityEngine.Object;
 
 namespace JalapenoLabs.Weather.Audio;
 
 /// <summary>
-/// Everything the storm sounds like: rain (a light patter or a roaring downpour), wind, the drum of rain on a roof
-/// overhead, and thunder.
+/// Everything the storm sounds like: rain (light or heavy, in the open or heard through a roof), the drum of rain on a
+/// drillship's hull beside you, wind, and thunder.
 ///
-/// The sounds are synthesised on a worker thread when the island loads (see <see cref="WeatherSounds"/>); until they
-/// are ready the storm is silent. Every source plays without a mixer group, so it follows the player's master volume
-/// (AudioListener.volume) and pauses with the game, but no zone's mixer snapshot can duck or swell it. Muffling under a
-/// roof is the mod's own low-pass filter. Underground the weather falls silent.
+/// The rain is recorded (see <c>Recordings/CREDITS.md</c>): four loops shipped in the mod's Sounds folder, light and
+/// heavy rain in the open and the same two as a steel hull lets them through. Going under a roof crossfades from the
+/// open loops to the muffled ones; nothing is filtered live, because a filter swept as the player moves warbles. The
+/// wind and thunder are synthesised on a worker thread when the island loads (see <see cref="WeatherSounds"/>), and
+/// the wind's muffled twin is the same loop through a fixed filter. Until the sounds are ready the storm is silent.
+///
+/// Every source plays without a mixer group, so it follows the player's master volume (AudioListener.volume) and
+/// pauses with the game, and on top of that the Weather volume the mod adds to the options (<see
+/// cref="WeatherSettings"/>). Underground the weather falls silent.
 /// </summary>
 internal sealed class WeatherAudio : IDisposable {
-    /// <summary>How the rain sounds through walls: muffled to this cutoff, at this share of its volume.</summary>
-    const float ShelteredCutoff = 750;
-    const float ShelteredLevel = 0.4f;
-    const float OpenCutoff = 22000;
+    /// <summary>The wind heard through walls: muffled to this cutoff, at this share of its volume.</summary>
+    const float ShelteredWindCutoff = 900;
+    const float ShelteredWindLevel = 0.35f;
+
+    /// <summary>How loud thunder is heard from under a roof, against out in the open.</summary>
+    const float ShelteredThunderLevel = 0.55f;
+
+    /// <summary>Each rain loop's level at full strength; the loops are rendered to a common loudness.</summary>
+    const float OpenLightLevel = 0.75f;
+    const float OpenHeavyLevel = 0.9f;
+    const float IndoorLightLevel = 0.7f;
+    const float IndoorHeavyLevel = 0.85f;
+
+    /// <summary>Beside a drillship out in the open, the drumming on its hull mixes in up to this share.</summary>
+    const float HullDrumShare = 0.45f;
 
     /// <summary>The speed of sound, for the gap between a flash and its thunder.</summary>
     const float SoundSpeed = 343;
@@ -43,6 +60,14 @@ internal sealed class WeatherAudio : IDisposable {
 
     const int ThunderVariants = 3;
 
+    /// <summary>The recorded loops, by the file they are shipped as.</summary>
+    enum Recording {
+        RainLight,
+        RainHeavy,
+        RainLightIndoor,
+        RainHeavyIndoor,
+    }
+
     readonly struct PendingThunder {
         public readonly float PlayAt;
         public readonly AudioClip Clip;
@@ -57,19 +82,19 @@ internal sealed class WeatherAudio : IDisposable {
         }
     }
 
-    /// <summary>What the worker thread synthesises: the loops, then the thunder variants.</summary>
+    /// <summary>What the worker thread synthesises: the wind loop, then the thunder variants.</summary>
     sealed class SoundSet {
-        public SoundBuffer Downpour;
-        public SoundBuffer Patter;
-        public SoundBuffer Roof;
         public SoundBuffer Wind;
         public SoundBuffer[] NearThunder;
         public SoundBuffer[] FarThunder;
     }
 
     readonly GameObject host;
+    readonly WeatherSettings settings;
     readonly Tasks.Task<SoundSet> synthesis;
     readonly string dumpDirectory;
+    readonly Dictionary<Recording, UnityWebRequest> loading = new Dictionary<Recording, UnityWebRequest>();
+    readonly Dictionary<Recording, AudioSource> rain = new Dictionary<Recording, AudioSource>();
     readonly List<PendingThunder> pendingThunder = new List<PendingThunder>();
     readonly List<AudioSource> thunderSources = new List<AudioSource>();
     readonly List<AudioClip> clips = new List<AudioClip>();
@@ -77,23 +102,37 @@ internal sealed class WeatherAudio : IDisposable {
     readonly Collider[] nearbyColliders = new Collider[128];
     float hullProximity;
     float nextHullCheck;
-    AudioSource downpour;
-    AudioSource patter;
-    AudioSource roof;
     AudioSource wind;
-    AudioLowPassFilter downpourFilter;
-    AudioLowPassFilter patterFilter;
-    AudioLowPassFilter windFilter;
+    AudioSource windIndoor;
     AudioClip[] nearThunder;
     AudioClip[] farThunder;
     bool isReady;
     bool hasLoggedFailure;
 
-    public WeatherAudio(Transform parent, string dumpDirectory) {
+    public WeatherAudio(Transform parent, WeatherSettings settings, string soundsDirectory, string dumpDirectory) {
         host = new GameObject("Weather.Audio");
         host.transform.SetParent(parent, false);
+        this.settings = settings;
         this.dumpDirectory = dumpDirectory;
         synthesis = Tasks.Task.Run(Synthesise);
+        foreach (Recording recording in (Recording[])Enum.GetValues(typeof(Recording))) {
+            string path = Path.Combine(soundsDirectory, $"{recording}.ogg");
+            if (!File.Exists(path)) {
+                Debug.LogError($"{WeatherMod.LogPrefix}The recorded rain {path} is missing; that rain stays silent");
+                continue;
+            }
+            UnityWebRequest request = UnityWebRequestMultimedia.GetAudioClip(
+                new Uri(path).AbsoluteUri,
+                AudioType.OGGVORBIS
+            );
+            // Kept compressed in memory and decoded as it plays: four loops at once cost little, and all of them
+            // decompressed would hold some 30 MB.
+            var handler = (DownloadHandlerAudioClip)request.downloadHandler;
+            handler.streamAudio = false;
+            handler.compressed = true;
+            request.SendWebRequest();
+            loading[recording] = request;
+        }
 
         closeThunderShake = ScriptableObject.CreateInstance<ShakeData>();
         closeThunderShake.name = "Weather.CloseThunder";
@@ -106,9 +145,6 @@ internal sealed class WeatherAudio : IDisposable {
 
     static SoundSet Synthesise() {
         var set = new SoundSet {
-            Downpour = WeatherSounds.Downpour(101),
-            Patter = WeatherSounds.Patter(102),
-            Roof = WeatherSounds.Roof(103),
             Wind = WeatherSounds.Wind(104),
             NearThunder = new SoundBuffer[ThunderVariants],
             FarThunder = new SoundBuffer[ThunderVariants],
@@ -121,35 +157,45 @@ internal sealed class WeatherAudio : IDisposable {
     }
 
     /// <summary>Called each frame with the storm's state and where the player is.</summary>
-    public void Update(float rain, float windSpeed, float surface, float outdoors, Vector3 listener) {
-        if (!isReady && !TryFinishSynthesis()) {
+    /// <param name="rainStrength">How hard it rains, 0 to 1.</param>
+    /// <param name="windSpeed">The wind's speed this moment, gusts included, in metres per second.</param>
+    /// <param name="surface">0 underground, 1 on the surface.</param>
+    /// <param name="outdoors">0 under a roof, 1 out in the open.</param>
+    public void Update(float rainStrength, float windSpeed, float surface, float outdoors, Vector3 listener) {
+        if (!isReady && !TryFinishLoading()) {
             return;
         }
+        float volume = settings.Volume * surface;
+        // An equal-power crossfade, so stepping through a door neither dips nor swells the rain.
+        float open = Mathf.Sqrt(outdoors);
+        float sheltered = Mathf.Sqrt(1 - outdoors);
 
-        float cutoff = Mathf.Lerp(ShelteredCutoff, OpenCutoff, outdoors * outdoors);
-        float level = Mathf.Lerp(ShelteredLevel, 1, outdoors) * surface;
-        downpourFilter.cutoffFrequency = cutoff;
-        patterFilter.cutoffFrequency = cutoff;
-        windFilter.cutoffFrequency = Mathf.Lerp(ShelteredCutoff * 2, OpenCutoff, outdoors);
-
-        // Light rain is mostly patter; as it strengthens the patter drowns in the downpour's roar.
-        float drowned = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.35f, 0.9f, rain));
-        float patterShare = Mathf.Clamp01(rain / 0.3f) * (1 - drowned);
-        float downpourShare = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.15f, 1, rain));
-        patter.volume = 0.75f * patterShare * level;
-        downpour.volume = 0.85f * downpourShare * level;
-
-        // Under a roof, or next to a drillship, the rain drums on the panels overhead.
+        // Under a roof, or out beside a drillship, the rain drums on the hull.
         if (Time.time >= nextHullCheck) {
             hullProximity = MeasureHullProximity(listener);
             nextHullCheck = Time.time + HullCheckSeconds;
         }
-        float hullDrum = (1 - outdoors) + outdoors * 0.5f * hullProximity;
-        roof.volume = 0.8f * Mathf.Clamp01(rain * 1.3f) * hullDrum * surface;
+        float indoor = Mathf.Clamp01(sheltered + open * HullDrumShare * hullProximity);
 
-        wind.volume = 0.55f * Mathf.Clamp01(windSpeed / 10) * Mathf.Lerp(0.35f, 1, outdoors) * surface;
+        // Light rain is the light recording; as it strengthens it gives way to the heavy one.
+        float heavyShare = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.35f, 0.85f, rainStrength));
+        float lightShare = Mathf.Clamp01(rainStrength / 0.2f) * (1 - heavyShare);
+        SetVolume(Recording.RainLight, OpenLightLevel * lightShare * open * volume);
+        SetVolume(Recording.RainHeavy, OpenHeavyLevel * heavyShare * open * volume);
+        SetVolume(Recording.RainLightIndoor, IndoorLightLevel * lightShare * indoor * volume);
+        SetVolume(Recording.RainHeavyIndoor, IndoorHeavyLevel * heavyShare * indoor * volume);
+
+        float windLevel = 0.55f * Mathf.Clamp01(windSpeed / 10) * volume;
+        wind.volume = windLevel * open;
+        windIndoor.volume = windLevel * ShelteredWindLevel * sheltered;
 
         PlayDueThunder();
+    }
+
+    void SetVolume(Recording recording, float volume) {
+        if (rain.TryGetValue(recording, out AudioSource source)) {
+            source.volume = volume;
+        }
     }
 
     /// <summary>
@@ -175,7 +221,7 @@ internal sealed class WeatherAudio : IDisposable {
         AudioClip clip = variants[(int)(seed % (ulong)variants.Length)];
 
         float loudness = power * Mathf.Clamp(1.25f - distance / 2600, 0.12f, 1) * (reachesGround ? 1 : 0.7f);
-        float volume = loudness * Mathf.Lerp(ShelteredLevel + 0.15f, 1, outdoors) * surface;
+        float volume = loudness * Mathf.Lerp(ShelteredThunderLevel, 1, outdoors) * surface;
         float pan = Mathf.Clamp(Vector3.Dot(camera.transform.right, toStrike.normalized), -1, 1) * 0.6f;
         pendingThunder.Add(new PendingThunder(Time.time + distance / SoundSpeed, clip, volume, pan));
 
@@ -193,7 +239,8 @@ internal sealed class WeatherAudio : IDisposable {
             pendingThunder.RemoveAt(index);
             AudioSource source = FreeThunderSource();
             source.clip = thunder.Clip;
-            source.volume = thunder.Volume;
+            // The Weather volume applies when the thunder plays, so moving the slider takes effect on the next roll.
+            source.volume = thunder.Volume * settings.Volume;
             source.panStereo = thunder.Pan;
             source.Play();
         }
@@ -230,46 +277,81 @@ internal sealed class WeatherAudio : IDisposable {
         return 1 - nearest / HullDrumReach;
     }
 
-    bool TryFinishSynthesis() {
+    /// <summary>Starts every loop once the synthesis and the recordings have all finished loading.</summary>
+    bool TryFinishLoading() {
         if (!synthesis.IsCompleted) {
             return false;
         }
+        foreach (UnityWebRequest request in loading.Values) {
+            if (!request.isDone) {
+                return false;
+            }
+        }
         if (synthesis.IsFaulted) {
             if (!hasLoggedFailure) {
-                Debug.LogError($"{WeatherMod.LogPrefix}The storm's sounds could not be made; it stays silent: "
-                    + synthesis.Exception);
+                Debug.LogError($"{WeatherMod.LogPrefix}The storm's wind and thunder could not be made; the storm "
+                    + $"stays silent: {synthesis.Exception}");
                 hasLoggedFailure = true;
             }
             return false;
         }
 
+        foreach (KeyValuePair<Recording, UnityWebRequest> entry in loading) {
+            using UnityWebRequest request = entry.Value;
+            AudioClip clip = request.result == UnityWebRequest.Result.Success
+                ? DownloadHandlerAudioClip.GetContent(request)
+                : null;
+            if (clip == null) {
+                Debug.LogError($"{WeatherMod.LogPrefix}Could not load the recorded rain {entry.Key}: {request.error}");
+                continue;
+            }
+            clip.name = $"Weather.{entry.Key}";
+            clips.Add(clip);
+            rain[entry.Key] = CreateSource(entry.Key.ToString(), clip, isLooping: true);
+        }
+        loading.Clear();
+
         SoundSet set = synthesis.Result;
-        downpour = CreateSource("Downpour", ToClip("Weather.Downpour", set.Downpour), isLooping: true);
-        patter = CreateSource("Patter", ToClip("Weather.Patter", set.Patter), isLooping: true);
-        roof = CreateSource("Roof", ToClip("Weather.Roof", set.Roof), isLooping: true);
-        wind = CreateSource("Wind", ToClip("Weather.Wind", set.Wind), isLooping: true);
-        downpourFilter = downpour.gameObject.AddComponent<AudioLowPassFilter>();
-        patterFilter = patter.gameObject.AddComponent<AudioLowPassFilter>();
-        windFilter = wind.gameObject.AddComponent<AudioLowPassFilter>();
+        AudioClip windClip = ToClip("Weather.Wind", set.Wind);
+        wind = CreateSource("Wind", windClip, isLooping: true);
+        windIndoor = CreateSource("WindIndoor", windClip, isLooping: true);
+        // A fixed filter: the indoor wind is a separate source crossfaded in, never a cutoff swept as the player moves.
+        windIndoor.gameObject.AddComponent<AudioLowPassFilter>().cutoffFrequency = ShelteredWindCutoff;
         nearThunder = new AudioClip[ThunderVariants];
         farThunder = new AudioClip[ThunderVariants];
         for (int variant = 0; variant < ThunderVariants; variant++) {
             nearThunder[variant] = ToClip($"Weather.ThunderNear{variant}", set.NearThunder[variant]);
             farThunder[variant] = ToClip($"Weather.ThunderFar{variant}", set.FarThunder[variant]);
         }
-        foreach (AudioSource loop in new[] { downpour, patter, roof, wind }) {
+
+        var loops = new List<AudioSource>(rain.Values) { wind, windIndoor };
+        foreach (AudioSource loop in loops) {
             loop.volume = 0;
-            // Start each loop at a different point, so the loops never line up into an audible pattern.
+            // Start each loop at a different point, so they never line up into an audible pattern.
             loop.timeSamples = (int)(loop.clip.samples * ((loop.GetInstanceID() & 0xFF) / 256f));
             loop.Play();
         }
+        // The open and indoor versions of a recording are the same rain; started together, they crossfade in step.
+        AlignWith(Recording.RainLightIndoor, Recording.RainLight);
+        AlignWith(Recording.RainHeavyIndoor, Recording.RainHeavy);
+        windIndoor.timeSamples = wind.timeSamples;
 
         if (dumpDirectory != null) {
             DumpSounds(set);
         }
-        Debug.Log($"{WeatherMod.LogPrefix}Storm sounds ready ({clips.Count} clips)");
+        Debug.Log($"{WeatherMod.LogPrefix}Storm sounds ready ({rain.Count} recorded loops, {clips.Count} clips)");
         isReady = true;
         return true;
+    }
+
+    void AlignWith(Recording follower, Recording leader) {
+        bool hasFollower = rain.TryGetValue(follower, out AudioSource following);
+        bool hasLeader = rain.TryGetValue(leader, out AudioSource leading);
+        if (!hasFollower || !hasLeader) {
+            Debug.Log($"{WeatherMod.LogPrefix}{follower} or {leader} did not load, so they play out of step");
+            return;
+        }
+        following.timeSamples = leading.timeSamples;
     }
 
     AudioSource CreateSource(string name, AudioClip clip, bool isLooping) {
@@ -293,19 +375,16 @@ internal sealed class WeatherAudio : IDisposable {
         return clip;
     }
 
-    /// <summary>Developer aid (-weather-dump-sounds): writes every sound as a 16-bit WAV file to listen to.</summary>
+    /// <summary>Developer aid (-weather-dump-sounds): writes every synthesised sound as a 16-bit WAV file.</summary>
     void DumpSounds(SoundSet set) {
         try {
             Directory.CreateDirectory(dumpDirectory);
-            WriteWav("downpour", set.Downpour);
-            WriteWav("patter", set.Patter);
-            WriteWav("roof", set.Roof);
             WriteWav("wind", set.Wind);
             for (int variant = 0; variant < ThunderVariants; variant++) {
                 WriteWav($"thunder-near-{variant}", set.NearThunder[variant]);
                 WriteWav($"thunder-far-{variant}", set.FarThunder[variant]);
             }
-            Debug.Log($"{WeatherMod.LogPrefix}Wrote the storm's sounds to {dumpDirectory}");
+            Debug.Log($"{WeatherMod.LogPrefix}Wrote the storm's synthesised sounds to {dumpDirectory}");
         } catch (Exception exception) {
             Debug.LogError($"{WeatherMod.LogPrefix}Could not write the storm's sounds to {dumpDirectory}: {exception}");
         }
@@ -332,6 +411,9 @@ internal sealed class WeatherAudio : IDisposable {
     }
 
     public void Dispose() {
+        foreach (UnityWebRequest request in loading.Values) {
+            request.Dispose();
+        }
         Object.Destroy(host);
         Object.Destroy(closeThunderShake);
         foreach (AudioClip clip in clips) {

@@ -40,6 +40,8 @@ internal sealed class WeatherController : MonoBehaviour {
 
     SyncedClock clock;
     DevOptions devOptions;
+    WeatherSettings settings;
+    string soundsDirectory;
     WeatherSample weather;
     Camera viewCamera;
     StormSun sun;
@@ -76,12 +78,20 @@ internal sealed class WeatherController : MonoBehaviour {
     /// <summary>Developer captures set this to photograph the lens drops, which follow the hidden HUD.</summary>
     public bool IsLensRainForced { get; set; }
 
-    public static WeatherController Create(Scene gameScene, SyncedClock clock, DevOptions devOptions) {
+    public static WeatherController Create(
+        Scene gameScene,
+        SyncedClock clock,
+        DevOptions devOptions,
+        WeatherSettings settings,
+        string soundsDirectory
+    ) {
         var host = new GameObject("Weather");
         SceneManager.MoveGameObjectToScene(host, gameScene);
         var controller = host.AddComponent<WeatherController>();
         controller.clock = clock;
         controller.devOptions = devOptions;
+        controller.settings = settings;
+        controller.soundsDirectory = soundsDirectory;
         return controller;
     }
 
@@ -98,7 +108,7 @@ internal sealed class WeatherController : MonoBehaviour {
         }
         ambience = Start(() => new StormAmbience());
         volume = Own(Start(() => new StormVolume(scene)));
-        audio = Own(Start(() => new WeatherAudio(transform, devOptions.SoundDumpDirectory)));
+        audio = Own(Start(() => new WeatherAudio(transform, settings, soundsDirectory, devOptions.SoundDumpDirectory)));
         sea = Own(Start(() => new StormSea()));
         textures = Own(Start(() => new StormTextures()));
 

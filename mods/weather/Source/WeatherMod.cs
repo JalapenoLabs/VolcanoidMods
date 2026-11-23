@@ -18,15 +18,19 @@ public sealed class WeatherMod : GameMod {
     internal const string LogPrefix = "[Weather] ";
 
     DevOptions devOptions;
+    WeatherSettings settings;
 
     public override void Load() {
         devOptions = DevOptions.FromCommandLine();
-        Debug.Log($"{LogPrefix}Loaded version {Owner.Manifest.Version}. {devOptions.Describe()}");
+        settings = WeatherSettings.Load(PersistentDataDir);
+        Debug.Log($"{LogPrefix}Loaded version {Owner.Manifest.Version}, weather volume {settings.Volume:0.00}. "
+            + devOptions.Describe());
         PrepareCaptureRun();
     }
 
     public override void OnMainMenuLoaded(Scene mainMenuScene) {
         PrepareCaptureRun();
+        WeatherVolumeSlider.AddToOptionsScreens(settings);
     }
 
     public override void OnGameLoading(Scene gameScene, AsyncOperation gameSceneLoadOperation) {
@@ -35,7 +39,10 @@ public sealed class WeatherMod : GameMod {
 
     public override void OnGameLoaded(Scene gameScene) {
         PrepareCaptureRun();
-        WeatherController.Create(gameScene, new SyncedClock(devOptions), devOptions);
+        WeatherVolumeSlider.AddToOptionsScreens(settings);
+        // The recorded rain ships in the mod's own folder, beside its assembly.
+        string soundsDirectory = System.IO.Path.Combine(Owner.Path, "Sounds");
+        WeatherController.Create(gameScene, new SyncedClock(devOptions), devOptions, settings, soundsDirectory);
     }
 
     /// <summary>

@@ -10,16 +10,10 @@ namespace JalapenoLabs.Weather.Tests;
 public class SynthTests {
     /// <summary>Each loop with its length in seconds.</summary>
     static readonly Dictionary<string, float> LoopSeconds = new Dictionary<string, float> {
-        ["downpour"] = 8,
-        ["patter"] = 8,
-        ["roof"] = 8,
         ["wind"] = 16,
     };
 
     public static IEnumerable<object[]> Loops() {
-        yield return new object[] { "downpour", WeatherSounds.Downpour(1) };
-        yield return new object[] { "patter", WeatherSounds.Patter(2) };
-        yield return new object[] { "roof", WeatherSounds.Roof(3) };
         yield return new object[] { "wind", WeatherSounds.Wind(4) };
     }
 

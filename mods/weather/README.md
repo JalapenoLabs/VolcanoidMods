@@ -67,14 +67,16 @@ and by night, and storm clouds hide the moon and stars. Neither mod needs the ot
   remember its weather. Loading a game drops you into whatever the sky is doing right now.
 - Armour soaks up a lightning strike the way it soaks up any other hit. Being under a roof (inside a drillship, a mine
   or a shelter) keeps you safe from strikes entirely, and so does a drillship's hull for the COGs inside it.
-- There are no settings: the storm schedule is fixed.
+- The only setting is a **Weather** volume slider, under Warning volume in the game's audio options; the storm
+  schedule itself is fixed.
 
 ## How it works
 
 The storm schedule is a pure function of the time: every copy of the mod works out the same storms, and the same
 lightning strikes, from the same clock. The clouds, rain, splashes, puddles, steam and lightning are particles and
-lights drawn with the game's own shaders, and every texture and sound is generated when a game loads, so the mod is a
-single file. Design notes: [docs/weather.md](../../docs/weather.md).
+lights drawn with the game's own shaders, and every texture is generated when a game loads. The rain is recorded
+(public-domain recordings by Ylmir; see [Recordings/CREDITS.md](Recordings/CREDITS.md)); the wind and thunder are
+synthesised. Design notes: [docs/weather.md](../../docs/weather.md).
 
 ## Support
 
