@@ -14,10 +14,22 @@ namespace JalapenoLabs.Weather.Visuals;
 /// Only out in the open: never inside a drillship, a shelter or a mine, and never underground. More drops land when
 /// the player looks up into the rain. They are drawn on a screen overlay canvas under the HUD, and follow the HUD's own
 /// visibility rule (the player's Show HUD option and whatever screen is open), so hiding the HUD hides them too.
+///
+/// They are meant to be noticed, not looked at: each is mostly clear with a soft bright rim along its bottom, takes one
+/// of sixteen shapes at random, is never more than about half opaque, and most are small. The occasional large one is
+/// what sells it.
 /// </summary>
 internal sealed class LensRain : IDisposable {
-    const int MaxDrops = 48;
-    const float HeaviestDropsPerSecond = 9;
+    const int MaxDrops = 40;
+    const float HeaviestDropsPerSecond = 6;
+
+    /// <summary>The most opaque a drop ever gets, and the least: none is ever solid.</summary>
+    const float MostOpacity = 0.55f;
+    const float LeastOpacity = 0.2f;
+
+    /// <summary>A drop's size, as a share of the screen's height, from the smallest to the largest.</summary>
+    const float SmallestDrop = 0.008f;
+    const float LargestDrop = 0.032f;
 
     /// <summary>Below the HUD's canvases, which sit at the default order.</summary>
     const int SortingOrder = -10;
@@ -26,6 +38,7 @@ internal sealed class LensRain : IDisposable {
         public float Age;
         public float Life;
         public float SlideSpeed;
+        public float Opacity;
         public bool IsActive;
     }
 
@@ -49,16 +62,12 @@ internal sealed class LensRain : IDisposable {
         canvas = host.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = SortingOrder;
-        int tiles = Art.WeatherArt.LensDropAtlasTiles;
         for (int index = 0; index < MaxDrops; index++) {
             var dropObject = new GameObject("Drop");
             dropObject.transform.SetParent(host.transform, false);
             RawImage image = dropObject.AddComponent<RawImage>();
             image.texture = textures.LensDrops;
             image.raycastTarget = false;
-            int tile = index % (tiles * tiles);
-            float tileSize = 1f / tiles;
-            image.uvRect = new Rect(tile % tiles * tileSize, tile / tiles * tileSize, tileSize, tileSize);
             image.enabled = false;
             images[index] = image;
         }
@@ -96,11 +105,12 @@ internal sealed class LensRain : IDisposable {
                 images[index].enabled = false;
                 continue;
             }
-            float fadeIn = Mathf.Clamp01(drop.Age / 0.08f);
-            float fadeOut = 1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(drop.Life * 0.55f, drop.Life, drop.Age));
-            images[index].color = new Color(1, 1, 1, fadeIn * fadeOut * 0.85f);
+            float fadeIn = Mathf.Clamp01(drop.Age / 0.15f);
+            // A drop on a visor evaporates and thins gradually, over the second half of its life.
+            float fadeOut = 1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(drop.Life * 0.45f, drop.Life, drop.Age));
+            images[index].color = new Color(1, 1, 1, fadeIn * fadeOut * drop.Opacity);
             // Heavier drops gather and run down the lens after a moment.
-            if (drop.Age > 0.5f && drop.SlideSpeed > 0) {
+            if (drop.Age > 0.6f && drop.SlideSpeed > 0) {
                 RectTransform rect = images[index].rectTransform;
                 rect.anchoredPosition += Vector2.down * (drop.SlideSpeed * screenHeight * deltaTime);
             }
@@ -113,19 +123,28 @@ internal sealed class LensRain : IDisposable {
             return;
         }
         float screenHeight = Screen.height;
-        float size = random.Range(0.016f, 0.05f) * screenHeight;
-        RectTransform rect = images[free].rectTransform;
+        // Mostly small drops, now and then a big one.
+        float size = Mathf.Lerp(SmallestDrop, LargestDrop, Mathf.Pow(random.NextFloat(), 2.2f)) * screenHeight;
+        RawImage image = images[free];
+        int tiles = Art.WeatherArt.LensDropAtlasTiles;
+        int tile = (int)(random.NextFloat() * tiles * tiles);
+        float tileSize = 1f / tiles;
+        image.uvRect = new Rect(tile % tiles * tileSize, tile / tiles * tileSize, tileSize, tileSize);
+        RectTransform rect = image.rectTransform;
         rect.anchorMin = Vector2.zero;
         rect.anchorMax = Vector2.zero;
-        rect.sizeDelta = new Vector2(size, size * random.Range(1, 1.25f));
+        // Square: the shapes carry their own proportions, and stretching them is what made them look cartoonish.
+        rect.sizeDelta = new Vector2(size, size);
         rect.anchoredPosition = new Vector2(random.Range(0, Screen.width), random.Range(0, screenHeight));
         drops[free] = new Drop {
             Age = 0,
-            Life = random.Range(1.2f, 3.6f),
-            SlideSpeed = random.NextFloat() < 0.3f ? random.Range(0.02f, 0.07f) : 0,
+            Life = random.Range(1.5f, 5),
+            // Only the bigger drops gather enough water to run, and slowly.
+            SlideSpeed = size > 0.018f * screenHeight && random.NextFloat() < 0.35f ? random.Range(0.01f, 0.04f) : 0,
+            Opacity = random.Range(LeastOpacity, MostOpacity),
             IsActive = true,
         };
-        images[free].enabled = true;
+        image.enabled = true;
     }
 
     public void Dispose() {

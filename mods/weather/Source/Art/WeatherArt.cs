@@ -20,8 +20,8 @@ public static class WeatherArt {
     /// <summary>Puddle shapes per side of the puddle atlas.</summary>
     public const int PuddleAtlasTiles = 2;
 
-    /// <summary>Drop shapes per side of the lens-drop atlas.</summary>
-    public const int LensDropAtlasTiles = 2;
+    /// <summary>Drop shapes per side of the lens-drop atlas: sixteen, so no two drops nearby look alike.</summary>
+    public const int LensDropAtlasTiles = 4;
 
     /// <summary>Leaf shapes per side of the leaf atlas.</summary>
     public const int LeafAtlasTiles = 2;
@@ -256,36 +256,60 @@ public static class WeatherArt {
     }
 
     /// <summary>
-    /// Water drops on the lens: each focuses light like a little lens, so it is brighter low down and has a dark rim
-    /// above and a bright highlight near its top.
+    /// Water drops on the lens, as they look on a visor in the rain: almost clear, with a soft bright rim along the
+    /// bottom (a gentle U where the drop gathers the light) and a faint dark line along its top edge, no hard outline
+    /// and no highlight dot. Sixteen shapes: round, oval and leaning drops, some drawn out into a short run with a thin
+    /// trail above, where a drop has slid. White and dark only; the HUD sets each drop's strength.
     /// </summary>
-    public static ArtImage LensDropAtlas(ulong seed, int tileSize = 128) {
+    public static ArtImage LensDropAtlas(ulong seed, int tileSize = 96) {
         int size = tileSize * LensDropAtlasTiles;
         var image = new ArtImage(size, size);
         for (int tileY = 0; tileY < LensDropAtlasTiles; tileY++) {
             for (int tileX = 0; tileX < LensDropAtlasTiles; tileX++) {
-                ulong tileSeed = seed + (ulong)(tileY * LensDropAtlasTiles + tileX) * 6007;
+                int tile = tileY * LensDropAtlasTiles + tileX;
+                ulong tileSeed = seed + (ulong)tile * 6007;
+                // Every shape differs: its size in the tile, how round it is, which way it leans, how bright its rim.
+                float scale = 0.5f + 0.45f * Noise.Value(tileSeed + 4, 0.5f, 0.5f);
+                float aspect = 0.65f + 0.5f * Noise.Value(tileSeed, 0.5f, 0.5f);
+                float lean = (Noise.Value(tileSeed + 1, 0.5f, 0.5f) - 0.5f) * 0.45f;
+                float rimStrength = 0.45f + 0.3f * Noise.Value(tileSeed + 5, 0.5f, 0.5f);
+                float dropRadius = 0.62f * scale;
+                // A quarter of the drops have slid: they sit low, with a thin wet trail fading out above them.
+                bool hasRun = tile % 4 == 3;
+                float runLength = hasRun ? 0.4f + 0.35f * Noise.Value(tileSeed + 2, 0.5f, 0.5f) : 0;
                 for (int y = 0; y < tileSize; y++) {
                     for (int x = 0; x < tileSize; x++) {
                         float u = (x + 0.5f) / tileSize * 2 - 1;
                         float v = (y + 0.5f) / tileSize * 2 - 1;
-                        float wobble = 0.85f + 0.15f * Noise.Value(tileSeed, u * 2 + 3, v * 2 + 3);
-                        float radius = (float)Math.Sqrt(u * u + v * v) / wobble;
-                        float inside = 1 - SmoothStep(0.8f, 0.92f, radius);
-                        float rim = (float)Math.Exp(-Math.Pow((radius - 0.82f) / 0.08f, 2))
-                            * SmoothStep(-0.2f, 0.6f, v);
-                        float focus = SmoothStep(0.2f, -0.7f, v) * (1 - radius);
-                        float highlight = (float)Math.Exp(-(Math.Pow(u + 0.25f, 2) + Math.Pow(v - 0.4f, 2)) / 0.015f);
-                        float brightness = Math.Min(1, 0.55f + 0.5f * focus + highlight - 0.45f * rim);
-                        float alpha = inside * Math.Min(1, 0.35f + 0.4f * rim + 0.3f * focus + highlight);
-                        image.Set(
-                            tileX * tileSize + x,
-                            tileY * tileSize + y,
-                            brightness,
-                            brightness,
-                            brightness,
-                            alpha
-                        );
+                        float dropV = v + runLength * 0.5f;
+                        float dropU = u - lean * dropV;
+                        float wobble = 0.9f + 0.1f * Noise.Value(tileSeed + 3, u * 3 + 5, v * 3 + 5);
+                        float radius = (float)Math.Sqrt(dropU * dropU / (aspect * aspect) + dropV * dropV)
+                            / (dropRadius * wobble);
+                        float inside = 1 - SmoothStep(0.85f, 1.05f, radius);
+                        // The rim: a soft band just inside the edge, strongest along the bottom and gone by the sides'
+                        // tops, so it reads as a gentle U rather than a ring.
+                        float band = (float)Math.Exp(-Math.Pow((radius - 0.84f) / 0.14f, 2));
+                        float height = dropV / dropRadius;
+                        float rim = band * SmoothStep(0.35f, -0.65f, height) * rimStrength;
+                        // The meniscus: a faint darker line along the upper edge.
+                        float meniscus = band * SmoothStep(-0.1f, 0.7f, height) * 0.6f;
+                        // The trail starts at the drop's top edge and fades out as it climbs.
+                        float trail = 0;
+                        if (hasRun) {
+                            float across = Math.Abs(dropU) / (0.05f + 0.03f * scale);
+                            float fromTop = height - 0.9f;
+                            // Full strength from just inside the drop, under its meniscus, so the two meet.
+                            float joined = SmoothStep(-0.35f, -0.05f, fromTop);
+                            float along = joined * SmoothStep(runLength * 2.4f, 0.1f, fromTop);
+                            trail = (float)Math.Exp(-across * across) * along * 0.22f;
+                        }
+                        float body = inside * 0.06f;
+                        float light = rim + trail;
+                        float dark = meniscus * 0.3f;
+                        float alpha = Math.Min(1, body + light + dark);
+                        float shade = (body * 0.85f + light + dark * 0.15f) / Math.Max(body + light + dark, 0.0001f);
+                        image.Set(tileX * tileSize + x, tileY * tileSize + y, shade, shade, shade, alpha);
                     }
                 }
             }
