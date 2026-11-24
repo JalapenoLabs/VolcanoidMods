@@ -201,6 +201,8 @@ the next storm of a kind (`-weather-at thunder@-1`), freeze it there (`-weather-
 (`-weather-speed 5`), or photograph a list of moments and quit (`-weather-capture DIR -weather-shots
 "light@0.5,thunder@0.5"`), which `scripts/smoke_test.py weather` drives. `-weather-showcase FILE` adds a fully built
 drillship design for the drillship views, as Day/Night's showcase does (`docs/building.md#smoke-tests-linux`),
+`-weather-keys` turns on numpad hotkeys that jump the clock to a storm on the spot (0 thunderstorm, 1 light rain,
+2 heavy rain, each a few minutes in; 3 a thunderstorm from the start; 5 back to the shared clock),
 `-weather-in-gust` moves each captured moment on to the next full gust, `-weather-skip LavaSteam,StormVolume` leaves
 parts of the storm out to see what each contributes, and `-weather-test-damage` strikes the player and the nearest COG
 and logs their health and armour.

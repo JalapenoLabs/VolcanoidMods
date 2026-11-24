@@ -120,6 +120,9 @@ internal sealed class WeatherController : MonoBehaviour {
         if (devOptions.IsCapturing) {
             gameObject.AddComponent<Dev.CaptureDirector>().Begin(this, devOptions);
         }
+        if (devOptions.HasHotkeys) {
+            gameObject.AddComponent<Dev.DevHotkeys>().Begin(clock);
+        }
 
         Application.onBeforeRender += OnBeforeRender;
         RenderPipelineManager.beginContextRendering += OnBeginContextRendering;

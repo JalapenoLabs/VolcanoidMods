@@ -33,6 +33,7 @@ namespace JalapenoLabs.Weather;
 ///   -weather-skip LIST          leave out parts of the storm by class name ("LavaSteam,StormSea"), to see what each
 ///                               one contributes
 ///   -weather-in-gust            with a capture, move each moment on to the next full gust of wind
+///   -weather-keys               numpad hotkeys to call up weather on the spot (see Dev/DevHotkeys.cs)
 ///   -weather-perf               with a capture, run the frame rate uncapped and log each view's frame times; the
 ///                               "fly" view moves the camera across the island as the cinematic camera does
 ///   -weather-tree-wind QUALITY  experiment: switch the trees' SpeedTree wind on at this quality (FASTEST, FAST,
@@ -88,6 +89,8 @@ internal sealed class DevOptions {
     public readonly HashSet<string> SkippedParts;
     /// <summary>Whether captures wait for a full gust, to photograph the wind at its height.</summary>
     public readonly bool IsSeekingGusts;
+    /// <summary>Whether the numpad calls up weather (-weather-keys).</summary>
+    public readonly bool HasHotkeys;
     /// <summary>Whether captures measure frame times, uncapped (-weather-perf).</summary>
     public readonly bool IsMeasuringPerformance;
     /// <summary>The SpeedTree wind quality to try on the trees (-weather-tree-wind), or null.</summary>
@@ -107,6 +110,7 @@ internal sealed class DevOptions {
         bool isTestingDamage,
         HashSet<string> skippedParts,
         bool isSeekingGusts,
+        bool hasHotkeys,
         bool isMeasuringPerformance,
         string treeWindQuality
     ) {
@@ -123,6 +127,7 @@ internal sealed class DevOptions {
         IsTestingDamage = isTestingDamage;
         SkippedParts = skippedParts;
         IsSeekingGusts = isSeekingGusts;
+        HasHotkeys = hasHotkeys;
         IsMeasuringPerformance = isMeasuringPerformance;
         TreeWindQuality = treeWindQuality;
     }
@@ -130,7 +135,7 @@ internal sealed class DevOptions {
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
 
     public bool IsDefault => !Start.HasValue && Speed == 1 && !IsCapturing && SoundDumpDirectory == null
-        && !IsSurveying && SkippedParts.Count == 0;
+        && !IsSurveying && SkippedParts.Count == 0 && !HasHotkeys;
 
     public static DevOptions FromCommandLine() {
         string[] arguments = Environment.GetCommandLineArgs();
@@ -186,6 +191,7 @@ internal sealed class DevOptions {
                 StringComparer.OrdinalIgnoreCase
             ),
             isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0,
+            hasHotkeys: Array.IndexOf(arguments, "-weather-keys") >= 0,
             isMeasuringPerformance: Array.IndexOf(arguments, "-weather-perf") >= 0,
             treeWindQuality: ReadValue(arguments, "-weather-tree-wind")?.Trim().ToUpperInvariant()
         );
@@ -214,7 +220,10 @@ internal sealed class DevOptions {
         string skipped = SkippedParts.Count > 0
             ? $", leaving out {string.Join(", ", SkippedParts)}"
             : "";
-        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}{skipped}.";
+        string hotkeys = HasHotkeys
+            ? ", numpad hotkeys on"
+            : "";
+        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}{skipped}{hotkeys}.";
     }
 
     static Moment? ParseMoment(string text, string option) {
