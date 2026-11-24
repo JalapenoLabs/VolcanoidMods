@@ -70,25 +70,6 @@ internal sealed class SyncedClock {
         }
     }
 
-    /// <summary>
-    /// Developer hotkeys: moves the clock to a moment and runs on from it, at the developer speed if one was given.
-    /// The weather is a pure function of the time, so everything (rain, lightning, wind, puddles) jumps together.
-    /// </summary>
-    public void JumpTo(double syncedSeconds) {
-        anchorSeconds = syncedSeconds;
-        anchorRealtime = Time.realtimeSinceStartupAsDouble;
-        mode = Mode.Anchored;
-    }
-
-    /// <summary>Developer hotkeys: back to the shared clock every player of the mod reads.</summary>
-    public void ReturnToShared() {
-        anchorSeconds = WallSeconds();
-        anchorRealtime = Time.realtimeSinceStartupAsDouble;
-        mode = speed == 1
-            ? Mode.Live
-            : Mode.Anchored;
-    }
-
     /// <summary>Freezes the clock at one moment. Developer captures use this to photograph chosen weather.</summary>
     public void Hold(double syncedSeconds) {
         anchorSeconds = syncedSeconds;

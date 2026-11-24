@@ -41,6 +41,7 @@ it, because every copy reads the time of day from the same clock (UTC, checked a
 - The clock is real time: the sky keeps turning while the game is paused, and a save does not remember its time of
   day. Loading a game drops you wherever the shared clock is.
 - Whenever the game dims its sun (as eruption ash does), the moon and stars dim with it.
+- Works with [Rain & Thunderstorms](../weather/README.md): storm clouds hide the stars, the moon and its light.
 
 ## How it works
 

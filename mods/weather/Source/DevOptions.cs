@@ -36,11 +36,8 @@ namespace JalapenoLabs.Weather;
 ///   -weather-in-gust            with a capture, move each moment on to the next full gust of wind
 ///   -weather-strike-distance M  with a capture, bring the thunderstorm shots' bolt down this far ahead (default 380 m;
 ///                               natural strikes mostly land a kilometre or more away)
-///   -weather-keys               numpad hotkeys to call up weather on the spot (see Dev/DevHotkeys.cs)
 ///   -weather-perf               with a capture, run the frame rate uncapped and log each view's frame times; the
 ///                               "fly" view moves the camera across the island as the cinematic camera does
-///   -weather-tree-wind QUALITY  experiment: switch the trees' SpeedTree wind on at this quality (FASTEST, FAST,
-///                               BETTER, BEST) and feed its global sway inputs, to see whether the trees can move
 /// </summary>
 internal sealed class DevOptions {
     /// <summary>A moment within a storm of one kind.</summary>
@@ -96,12 +93,8 @@ internal sealed class DevOptions {
     public readonly bool IsSeekingGusts;
     /// <summary>How far ahead a capture's staged bolt lands, in metres (-weather-strike-distance).</summary>
     public readonly float StrikeDistance;
-    /// <summary>Whether the numpad calls up weather (-weather-keys).</summary>
-    public readonly bool HasHotkeys;
     /// <summary>Whether captures measure frame times, uncapped (-weather-perf).</summary>
     public readonly bool IsMeasuringPerformance;
-    /// <summary>The SpeedTree wind quality to try on the trees (-weather-tree-wind), or null.</summary>
-    public readonly string TreeWindQuality;
 
     DevOptions(
         Moment? start,
@@ -118,9 +111,7 @@ internal sealed class DevOptions {
         HashSet<string> skippedParts,
         bool isSeekingGusts,
         float strikeDistance,
-        bool hasHotkeys,
-        bool isMeasuringPerformance,
-        string treeWindQuality
+        bool isMeasuringPerformance
     ) {
         Start = start;
         IsFrozen = isFrozen;
@@ -136,15 +127,13 @@ internal sealed class DevOptions {
         SkippedParts = skippedParts;
         IsSeekingGusts = isSeekingGusts;
         StrikeDistance = strikeDistance;
-        HasHotkeys = hasHotkeys;
         IsMeasuringPerformance = isMeasuringPerformance;
-        TreeWindQuality = treeWindQuality;
     }
 
     public bool IsCapturing => !string.IsNullOrEmpty(CaptureDirectory) && Shots.Count > 0;
 
     public bool IsDefault => !Start.HasValue && Speed == 1 && !IsCapturing && SoundDumpDirectory == null
-        && !IsSurveying && SkippedParts.Count == 0 && !HasHotkeys;
+        && !IsSurveying && SkippedParts.Count == 0;
 
     public static DevOptions FromCommandLine() {
         string[] arguments = Environment.GetCommandLineArgs();
@@ -204,9 +193,7 @@ internal sealed class DevOptions {
                 ReadValue(arguments, "-weather-strike-distance"),
                 "-weather-strike-distance"
             ) ?? 380),
-            hasHotkeys: Array.IndexOf(arguments, "-weather-keys") >= 0,
-            isMeasuringPerformance: Array.IndexOf(arguments, "-weather-perf") >= 0,
-            treeWindQuality: ReadValue(arguments, "-weather-tree-wind")?.Trim().ToUpperInvariant()
+            isMeasuringPerformance: Array.IndexOf(arguments, "-weather-perf") >= 0
         );
     }
 
@@ -233,10 +220,7 @@ internal sealed class DevOptions {
         string skipped = SkippedParts.Count > 0
             ? $", leaving out {string.Join(", ", SkippedParts)}"
             : "";
-        string hotkeys = HasHotkeys
-            ? ", numpad hotkeys on"
-            : "";
-        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}{skipped}{hotkeys}.";
+        return $"Developer weather: {start}, speed x{Speed}{capture}{sounds}{survey}{skipped}.";
     }
 
     static Moment? ParseMoment(string text, string option) {

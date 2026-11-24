@@ -1,7 +1,7 @@
 {
   "UniqueModId": "JalapenoLabs.Weather",
   "Title": "Rain & Thunderstorms",
-  "Version": "2026.11.19",
+  "Version": "2026.11.23",
   "Tags": ["Environment", "Visual"],
   "Assemblies": ["JalapenoLabs.Weather.dll"],
   "MultiplayerMode": 2,

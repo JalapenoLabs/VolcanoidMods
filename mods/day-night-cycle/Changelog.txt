@@ -1,3 +1,4 @@
 # Changelog
 
+2026.11.23 - Nights during an eruption keep their moonlit glow and horizon: the ash now dims the stars and moon, not the whole sky. Works with Rain & Thunderstorms: storm clouds hide the stars, the moon and its light.
 2026.11.19 - Initial release. A 30-minute day and 20-minute night on the surface: golden-hour sunsets, a dark night with a starlit base light, 5,500 stars and the Milky Way turning overhead, and a moon that runs through all eight phases every eight days and lights the island by its phase. Client-side only: players with the mod share the same sky, players without it are unaffected.

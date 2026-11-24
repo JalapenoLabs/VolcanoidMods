@@ -92,8 +92,5 @@ scripts/mods.py install weather
 
 Developer launch options for testing (Steam: Properties, Launch Options): `-weather-at thunder@-1` starts at the next
 thunderstorm as its clouds roll in, `-weather-hold` with it freezes that moment (`thunder@0.5` is mid-storm), and
-`-weather-speed 5` runs the weather five times faster. With `-weather-keys`, the numpad calls up weather on the
-spot: 0 a thunderstorm, 1 light rain, 2 heavy rain (each a few minutes into its rain), 3 a thunderstorm from the
-very start, and 5 back to the shared clock. These put your weather out of step with other players, so they are only
-for testing. Moments are `light`, `heavy` or `thunder` at a progress: -1 as
+`-weather-speed 5` runs the weather five times faster. Moments are `light`, `heavy` or `thunder` at a progress: -1 as
 the clouds start, 0 as the rain starts, 1 as it stops, 2 once the sky is clear.

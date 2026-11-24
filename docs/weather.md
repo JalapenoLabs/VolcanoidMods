@@ -151,10 +151,11 @@ volume's weight is the cloud cover alone, so under full cloud it replaces the bl
 ### Wind
 
 The island's trees cannot sway. They are SpeedTree 8 trees (`Universal Render Pipeline/Nature/SpeedTree8Extra_PBRLit`)
-whose every material uses `_WINDQUALITY_NONE`; switching a material to a wind quality at runtime renders the trees
-unchanged, as the game ships no wind variant of the shader for them. The game's two wind zones (an ambient one, and
-one that `ShakeWindZone` drives from camera shake) therefore move no trees either. The storm shows its wind in what
-moves instead:
+whose every material uses `_WINDQUALITY_NONE`. The shader declares the wind qualities, but switching a material to
+one and feeding SpeedTree's wind values (globally, then per material) left every canopy still, measured by frame
+differences with the wind blowing: the game's build of the shader has no working wind. The game's two wind zones (an
+ambient one, and one that `ShakeWindZone` drives from camera shake) therefore move no trees either. The storm shows
+its wind in what moves instead:
 
 - **Leaves** (`WindDebris`) are torn from the upper crowns of the real terrain trees within 70 m of the camera
   (`shared/TerrainTrees.cs` measures them), up to 60 a second in a gale's full gust and a quarter of that between
@@ -229,8 +230,6 @@ the next storm of a kind (`-weather-at thunder@-1`), freeze it there (`-weather-
 (`-weather-speed 5`), or photograph a list of moments and quit (`-weather-capture DIR -weather-shots
 "light@0.5,thunder@0.5"`), which `scripts/smoke_test.py weather` drives. `-weather-showcase FILE` adds a fully built
 drillship design for the drillship views, as Day/Night's showcase does (`docs/building.md#smoke-tests-linux`),
-`-weather-keys` turns on numpad hotkeys that jump the clock to a storm on the spot (0 thunderstorm, 1 light rain,
-2 heavy rain, each a few minutes in; 3 a thunderstorm from the start; 5 back to the shared clock),
 `-weather-in-gust` moves each captured moment on to the next full gust, `-weather-skip LavaSteam,StormVolume` leaves
 parts of the storm out to see what each contributes, and `-weather-test-damage` strikes the player and the nearest COG
 and logs their health and armour.
