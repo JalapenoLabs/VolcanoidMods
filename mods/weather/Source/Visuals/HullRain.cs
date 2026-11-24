@@ -191,6 +191,9 @@ internal sealed class HullRain : IDisposable {
         var renderer = system.GetComponent<ParticleSystemRenderer>();
         renderer.sharedMaterial = mistMaterial;
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        // Facing the camera's position and level with the world, so turning the head does not turn the mist.
+        renderer.alignment = ParticleSystemRenderSpace.Facing;
+        renderer.allowRoll = false;
         renderer.sortMode = ParticleSystemSortMode.Distance;
         GameMaterials.UseLitSmokeStreams(renderer);
         return system;

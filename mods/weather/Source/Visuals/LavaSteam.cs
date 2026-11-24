@@ -137,6 +137,10 @@ internal sealed class LavaSteam : IDisposable {
         var renderer = child.GetComponent<ParticleSystemRenderer>();
         renderer.sharedMaterial = material;
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        // Facing the camera's position and level with the world, so turning the head does not turn the steam (as for
+        // the cloud puffs).
+        renderer.alignment = ParticleSystemRenderSpace.Facing;
+        renderer.allowRoll = false;
         renderer.sortMode = ParticleSystemSortMode.Distance;
         renderer.maxParticleSize = 100;
         renderer.shadowCastingMode = ShadowCastingMode.Off;

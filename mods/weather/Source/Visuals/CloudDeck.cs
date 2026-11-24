@@ -129,6 +129,11 @@ internal sealed class CloudDeck : IDisposable {
         puffRenderer = host.GetComponent<ParticleSystemRenderer>();
         puffRenderer.sharedMaterial = puffMaterial;
         puffRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+        // Each puff faces where the camera is, kept level with the world, rather than lining up with the camera's own
+        // tilt (Unity's default). A view-aligned puff turns with the camera, so looking up and panning made the whole
+        // sky of clouds rotate with the mouse; facing the camera's position, a puff only changes as the camera moves.
+        puffRenderer.alignment = ParticleSystemRenderSpace.Facing;
+        puffRenderer.allowRoll = false;
         puffRenderer.sortMode = ParticleSystemSortMode.Distance;
         puffRenderer.minParticleSize = 0;
         puffRenderer.maxParticleSize = 100;

@@ -254,6 +254,9 @@ internal sealed class RainFall : IDisposable {
         var renderer = spray.GetComponent<ParticleSystemRenderer>();
         renderer.sharedMaterial = sprayMaterial;
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        // Facing the camera's position and level with the world, so turning the head does not turn the spray.
+        renderer.alignment = ParticleSystemRenderSpace.Facing;
+        renderer.allowRoll = false;
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         GameMaterials.UseLitSmokeStreams(renderer);
