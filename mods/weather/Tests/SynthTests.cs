@@ -44,8 +44,24 @@ public class SynthTests {
         SoundBuffer far = WeatherSounds.Thunder(5, isNear: false);
         AssertCleanAudio("near thunder", near);
         AssertCleanAudio("far thunder", far);
-        Assert.True(Peak(near, 0, 0.1f) > 0.4f, "a close strike should open with its crack");
+        // A close strike tears for up to a seventh of a second, then cracks and booms: at full force within a quarter.
+        Assert.True(Peak(near, 0, 0.25f) > 0.4f, "a close strike should open with its crack");
         Assert.True(Peak(far, 0, 0.1f) < Peak(far, 0, far.Frames / (float)WeatherSounds.SampleRate) * 0.5f);
+    }
+
+    /// <summary>
+    /// A close strike must boom, not hiss: its first moments carry more energy below 400 Hz than above 4 kHz. The
+    /// strike used to be a burst of bright noise, mostly above 6 kHz, which players heard as a cymbal being tapped.
+    /// </summary>
+    [Theory]
+    [InlineData(200UL)]
+    [InlineData(201UL)]
+    [InlineData(202UL)]
+    public void A_close_strike_booms_rather_than_hisses(ulong seed) {
+        SoundBuffer near = WeatherSounds.Thunder(seed, isNear: true);
+        float low = BandEnergy(near, Biquad.Kind.LowPass, 400, 0.6f);
+        float hiss = BandEnergy(near, Biquad.Kind.HighPass, 4000, 0.6f);
+        Assert.True(low > hiss * 10, $"seed {seed}: below 400 Hz {low}, above 4 kHz {hiss}");
     }
 
     [Fact]
@@ -60,6 +76,18 @@ public class SynthTests {
             peak = Math.Max(peak, Math.Abs(sample));
         }
         Assert.InRange(peak, 0.5f, 1f);
+    }
+
+    /// <summary>The energy of a sound's left channel through one filter, over its first moments.</summary>
+    static float BandEnergy(SoundBuffer sound, Biquad.Kind kind, float frequency, float seconds) {
+        var filter = new Biquad(kind, frequency, 0.7f, sound.SampleRate);
+        int frames = Math.Min(sound.Frames, (int)(seconds * sound.SampleRate));
+        float energy = 0;
+        for (int frame = 0; frame < frames; frame++) {
+            float filtered = filter.Process(sound.Samples[frame * 2]);
+            energy += filtered * filtered;
+        }
+        return energy;
     }
 
     static float Peak(SoundBuffer sound, float fromSeconds, float toSeconds) {

@@ -25,8 +25,8 @@ public readonly struct SoundBuffer {
 ///
 /// Wind is band-passed brown noise whose pitch and strength wander, with a whistle in the gusts. Thunder is brown noise
 /// behind a falling low-pass filter, swelling in several rolls as the sound arrives from different parts of the bolt;
-/// a close strike opens with a ripping crack. The wind loop crossfades its end into its start, so it repeats without a
-/// seam.
+/// a close strike opens with a rip, a crack and a heavy boom. The wind loop crossfades its end into its start, so it
+/// repeats without a seam.
 ///
 /// Each sound is drawn from a fixed seed, so it is the same in every game.
 ///
@@ -34,6 +34,9 @@ public readonly struct SoundBuffer {
 /// </summary>
 public static class WeatherSounds {
     public const int SampleRate = 44100;
+
+    /// <summary>How tall a close strike stands over the loudest of the thunder rolling after it.</summary>
+    const float StrikeOverRolls = 2.8f;
 
     /// <summary>How much of a loop's end is blended into its start to hide the seam.</summary>
     const float LoopCrossfadeSeconds = 0.5f;
@@ -128,7 +131,13 @@ public static class WeatherSounds {
         }
 
         if (isNear) {
-            AddCrack(ref random, left, right);
+            // The strike stands about three times as tall as the rolls' loudest moment, as a close strike does over
+            // its thunder; the rolls keep the level they have.
+            float rollPeak = 1e-6f;
+            for (int index = 0; index < frames; index++) {
+                rollPeak = Math.Max(rollPeak, Math.Max(Math.Abs(left[index]), Math.Abs(right[index])));
+            }
+            AddCloseStrike(ref random, left, right, rollPeak * StrikeOverRolls);
         }
 
         // Fade the very end, so a clip cut at its length never clicks.
@@ -141,29 +150,93 @@ public static class WeatherSounds {
         return Interleave(left, right, frames, 0.95f);
     }
 
-    /// <summary>The rip of a close strike: a sharp burst of bright noise, then a scatter of crackles.</summary>
-    static void AddCrack(ref StormRandom random, float[] left, float[] right) {
-        var highPass = new Biquad(Biquad.Kind.HighPass, 600, 0.7f, SampleRate);
-        int crackFrames = (int)(0.35f * SampleRate);
-        for (int index = 0; index < crackFrames; index++) {
-            float time = index / (float)SampleRate;
-            float value = highPass.Process(Dsp.White(ref random)) * (float)Math.Exp(-time / 0.045f) * 1.6f;
-            left[index] += value;
-            right[index] += value;
+    /// <summary>
+    /// The sound of a strike a few hundred metres off, before its thunder rolls: a short tearing rip as the channel
+    /// forms, a hard crack, and a heavy boom that falls in pitch, with a few crackles over it. It is built to have
+    /// weight, low end above all: a burst of bright noise alone sounds like a cymbal being tapped, not a strike.
+    /// </summary>
+    /// <param name="loudness">How loud the strike peaks: kept in proportion to the rolls, which follow it.</param>
+    static void AddCloseStrike(ref StormRandom random, float[] left, float[] right, float loudness) {
+        int length = Math.Min(left.Length, (int)(1.6f * SampleRate));
+        var strikeLeft = new float[length];
+        var strikeRight = new float[length];
+
+        // The rip: mid-range noise broken into tiny grains of random strength, rising for about a tenth of a second.
+        float ripSeconds = random.Range(0.06f, 0.14f);
+        int ripFrames = (int)(ripSeconds * SampleRate);
+        var ripLeft = new Biquad(Biquad.Kind.BandPass, 1100, 0.6f, SampleRate);
+        var ripRight = new Biquad(Biquad.Kind.BandPass, 1250, 0.6f, SampleRate);
+        int grainFrames = 0;
+        float grain = 0;
+        for (int index = 0; index < ripFrames; index++) {
+            if (grainFrames-- <= 0) {
+                grainFrames = (int)(random.Range(0.002f, 0.005f) * SampleRate);
+                grain = random.Range(0.25f, 1);
+            }
+            float rising = 0.2f + 0.8f * index / (float)ripFrames;
+            float level = grain * rising * 0.55f;
+            strikeLeft[index] += ripLeft.Process(Dsp.White(ref random)) * level;
+            strikeRight[index] += ripRight.Process(Dsp.White(ref random)) * level;
         }
 
-        int crackleCount = 5 + (int)(random.NextFloat() * 5);
-        for (int crackle = 0; crackle < crackleCount; crackle++) {
-            int start = (int)(random.Range(0.01f, 0.8f) * SampleRate);
-            float level = random.Range(0.2f, 0.6f);
-            float pan = random.NextFloat();
-            int length = Math.Min(left.Length - start, (int)(0.05f * SampleRate));
-            for (int offset = 0; offset < length; offset++) {
-                float time = offset / (float)SampleRate;
-                float value = Dsp.White(ref random) * (float)Math.Exp(-time / 0.008f) * level;
-                left[start + offset] += value * (float)Math.Sqrt(1 - pan);
-                right[start + offset] += value * (float)Math.Sqrt(pan);
+        // The crack and the boom, from the end of the rip. The crack is full-range noise with the top hiss rolled
+        // off, gone in a few hundredths of a second; the boom is noise whose cutoff falls from the mids into the
+        // bass as it dies away, over a sub-bass thump sliding down in pitch.
+        var crackLeft = new Biquad(Biquad.Kind.LowPass, 5000, 0.7f, SampleRate);
+        var crackRight = new Biquad(Biquad.Kind.LowPass, 5000, 0.7f, SampleRate);
+        var boomLeft = new Biquad(Biquad.Kind.LowPass, 900, 0.8f, SampleRate);
+        var boomRight = new Biquad(Biquad.Kind.LowPass, 900, 0.8f, SampleRate);
+        var boomNoise = new BrownNoise();
+        double thumpPhase = 0;
+        for (int index = ripFrames; index < length; index++) {
+            float time = (index - ripFrames) / (float)SampleRate;
+            if (index % 64 == 0) {
+                float cutoff = 750 * (float)Math.Exp(-time / 0.18f) + 140;
+                boomLeft.Tune(Biquad.Kind.LowPass, cutoff, 0.8f, SampleRate);
+                boomRight.Tune(Biquad.Kind.LowPass, cutoff * 0.95f, 0.8f, SampleRate);
             }
+            float attack = Math.Min(1, time / 0.004f);
+            float crack = (float)Math.Exp(-time / 0.014f);
+            float boom = attack * (float)Math.Exp(-time / 0.42f);
+            float thump = attack * (float)Math.Exp(-time / 0.33f);
+            float frequency = 38 + 37 * (float)Math.Exp(-time / 0.25f);
+            thumpPhase += 2 * Math.PI * frequency / SampleRate;
+            float thumpWave = (float)Math.Sin(thumpPhase) * thump * 0.9f;
+            float body = boomNoise.Next(ref random);
+            strikeLeft[index] += crackLeft.Process(Dsp.White(ref random)) * crack * 0.9f
+                + boomLeft.Process(body + 0.35f * Dsp.White(ref random)) * boom * 1.4f
+                + thumpWave;
+            strikeRight[index] += crackRight.Process(Dsp.White(ref random)) * crack * 0.9f
+                + boomRight.Process(body + 0.35f * Dsp.White(ref random)) * boom * 1.4f
+                + thumpWave;
+        }
+
+        // A few crackles over the boom: short mid-range bursts, not clicks of white noise.
+        var crackleFilter = new Biquad(Biquad.Kind.BandPass, 1800, 1.2f, SampleRate);
+        int crackleCount = 3 + (int)(random.NextFloat() * 4);
+        for (int crackle = 0; crackle < crackleCount; crackle++) {
+            int start = ripFrames + (int)(random.Range(0.02f, 0.5f) * SampleRate);
+            float level = random.Range(0.12f, 0.3f);
+            float pan = random.NextFloat();
+            int crackleLength = Math.Min(length - start, (int)(0.04f * SampleRate));
+            for (int offset = 0; offset < crackleLength; offset++) {
+                float time = offset / (float)SampleRate;
+                float value = crackleFilter.Process(Dsp.White(ref random)) * (float)Math.Exp(-time / 0.012f) * level;
+                strikeLeft[start + offset] += value * (float)Math.Sqrt(1 - pan);
+                strikeRight[start + offset] += value * (float)Math.Sqrt(pan);
+            }
+        }
+
+        // Brought to its loudness and laid over the start of the rolls. A gentle saturation keeps the boom's few
+        // tallest peaks from setting the level of everything else.
+        float strikePeak = 1e-6f;
+        for (int index = 0; index < length; index++) {
+            strikePeak = Math.Max(strikePeak, Math.Max(Math.Abs(strikeLeft[index]), Math.Abs(strikeRight[index])));
+        }
+        float gain = 1.4f * loudness / strikePeak;
+        for (int index = 0; index < length; index++) {
+            left[index] += loudness * (float)Math.Tanh(strikeLeft[index] * gain / loudness);
+            right[index] += loudness * (float)Math.Tanh(strikeRight[index] * gain / loudness);
         }
     }
 
