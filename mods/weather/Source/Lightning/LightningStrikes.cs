@@ -7,6 +7,7 @@ using JalapenoLabs.Weather.Forecast;
 using JalapenoLabs.Weather.Visuals;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
 namespace JalapenoLabs.Weather.Lightning;
@@ -47,6 +48,9 @@ internal sealed class LightningStrikes : IDisposable {
     /// </summary>
     const float ShelteredFlashShare = 0.15f;
 
+    /// <summary>Unity's built-in sprite shader, which takes no fog (see <see cref="CreateBoltMaterial"/>).</summary>
+    const string BoltShaderName = "Sprites/Default";
+
     readonly GameObject host;
     readonly Material boltMaterial;
     readonly Material sparkMaterial;
@@ -59,24 +63,22 @@ internal sealed class LightningStrikes : IDisposable {
     double lastNow = double.NaN;
 
     public LightningStrikes(Transform parent, StormTextures textures) {
-        // The game's 'ParticleGlow' configuration: unlit and additive, so a bolt glows and blooms.
-        boltMaterial = GameMaterials.CloneVariant(
+        // The sparks: the game's 'ParticleGlow' configuration, unlit and additive, far brighter than white so the bloom
+        // catches them. They only ever burst where a bolt lands nearby, so the game's fog on them does no harm.
+        sparkMaterial = GameMaterials.CloneVariant(
             GameMaterials.ParticlesUnlit,
             "ParticleGlow",
-            "lightning",
+            "lightning sparks",
             "_SURFACE_TYPE_TRANSPARENT"
         );
-        if (boltMaterial == null) {
+        if (sparkMaterial == null) {
             throw new InvalidOperationException("the game has no transparent unlit particle material to build on");
         }
-        boltMaterial.SetTexture(GameMaterials.BaseMapId, textures.Bolt);
-        // Additive (source alpha, one), and far brighter than white so the bloom catches it.
-        boltMaterial.SetFloat(GameMaterials.SourceBlendId, (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        boltMaterial.SetFloat(GameMaterials.DestinationBlendId, (float)UnityEngine.Rendering.BlendMode.One);
-        boltMaterial.SetColor(GameMaterials.BaseColorId, new Color(7, 7.5f, 11, 1));
-        sparkMaterial = new Material(boltMaterial) { name = "Weather.LightningSparks" };
         sparkMaterial.SetTexture(GameMaterials.BaseMapId, textures.RainStreak);
+        sparkMaterial.SetFloat(GameMaterials.SourceBlendId, (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        sparkMaterial.SetFloat(GameMaterials.DestinationBlendId, (float)UnityEngine.Rendering.BlendMode.One);
         sparkMaterial.SetColor(GameMaterials.BaseColorId, new Color(6, 5, 3.5f, 1));
+        boltMaterial = CreateBoltMaterial(textures, sparkMaterial);
 
         host = new GameObject("Weather.Lightning") { layer = Layers.MainZone };
         host.transform.SetParent(parent, false);
@@ -91,6 +93,31 @@ internal sealed class LightningStrikes : IDisposable {
         area = IslandArea();
         Debug.Log($"{WeatherMod.LogPrefix}Lightning can strike from ({area.MinX:0}, {area.MinZ:0}) "
             + $"to ({area.MaxX:0}, {area.MaxZ:0})");
+    }
+
+    /// <summary>
+    /// The bolts' channels. They draw with Unity's built-in Sprites/Default shader, which the game ships and which
+    /// takes no fog: through storm fog every particle shader fades a bolt a kilometre off to nothing (the game's fog at
+    /// storm density hides 98% of what lies that far), yet real lightning shows through rain for kilometres, and strikes
+    /// land anywhere on the island. The shader still tests depth, so hills hide what is behind them. Its colour is far
+    /// brighter than white, so the bloom catches the bolt.
+    /// </summary>
+    static Material CreateBoltMaterial(StormTextures textures, Material fallback) {
+        Shader shader = Shader.Find(BoltShaderName);
+        if (shader == null) {
+            Debug.LogWarning($"{WeatherMod.LogPrefix}The game no longer ships {BoltShaderName}; lightning draws with "
+                + "a particle shader, and the fog will hide distant bolts");
+            var foggy = new Material(fallback) { name = "Weather.Lightning" };
+            foggy.SetTexture(GameMaterials.BaseMapId, textures.Bolt);
+            foggy.SetColor(GameMaterials.BaseColorId, new Color(7, 7.5f, 11, 1));
+            return foggy;
+        }
+        return new Material(shader) {
+            name = "Weather.Lightning",
+            mainTexture = textures.Bolt,
+            color = new Color(7, 7.5f, 11, 1),
+            renderQueue = (int)RenderQueue.Transparent,
+        };
     }
 
     /// <summary>The flash's brightness this frame, 0 to 1, as seen from the camera.</summary>
@@ -302,7 +329,7 @@ internal sealed class LightningStrikes : IDisposable {
         Vector3 direction = Vector3.up;
         Vector3 eye = camera != null ? camera.transform.position : Vector3.zero;
         foreach (BoltEffect bolt in bolts) {
-            if (!bolt.IsActive || !bolt.Update(lightShare)) {
+            if (!bolt.IsActive || !bolt.Update(lightShare, eye)) {
                 continue;
             }
             Vector3 middle = (bolt.Top + bolt.Ground) / 2;

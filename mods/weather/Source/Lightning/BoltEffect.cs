@@ -31,6 +31,12 @@ internal sealed class BoltEffect : IDisposable {
     const float MainWidth = 3.6f;
     const float BranchWidth = 1.6f;
 
+    /// <summary>
+    /// Past this many metres of width per metre away, a bolt widens with its distance, so it keeps several pixels'
+    /// width on screen instead of thinning to a hair a kilometre off.
+    /// </summary>
+    const float WidthPerDistance = 0.007f;
+
     /// <summary>How bright a stroke's peak light is, before the strike's power and the stroke's share.</summary>
     const float CloudLightIntensity = 900000;
     const float GroundLightIntensity = 120000;
@@ -52,6 +58,8 @@ internal sealed class BoltEffect : IDisposable {
     int strokeCount;
     float startTime;
     float power;
+    /// <summary>The channel's width up close; in-cloud crawlers are thinner than bolts to the ground.</summary>
+    float channelWidth = MainWidth;
     bool reachesGround;
 
     public BoltEffect(Transform parent, Material boltMaterial, Material sparkMaterial) {
@@ -159,7 +167,7 @@ internal sealed class BoltEffect : IDisposable {
             BuildChannel(ref random, top, ground, MainSubdivisions, isInCloud ? 0.18f : 0.22f);
             mainLine.positionCount = points.Count;
             mainLine.SetPositions(points.ToArray());
-            mainLine.widthMultiplier = isInCloud ? MainWidth * 0.6f : MainWidth;
+            channelWidth = isInCloud ? MainWidth * 0.6f : MainWidth;
         }
 
         int branchCount = hasChannel ? 2 + (int)(random.NextFloat() * (MaxBranches - 1)) : 0;
@@ -210,11 +218,12 @@ internal sealed class BoltEffect : IDisposable {
     }
 
     /// <summary>Advances the flicker. Returns false once the bolt has faded.</summary>
+    /// <param name="eye">The camera's position, which a distant bolt widens to stay visible from.</param>
     /// <param name="lightShare">
     /// How much of the bolt's light reaches the world around the camera, 0 to 1. Its lights cast no shadows, so they
     /// would shine straight through rock and hulls; the caller turns them down under a roof and off underground.
     /// </param>
-    public bool Update(float lightShare) {
+    public bool Update(float lightShare, Vector3 eye) {
         float age = Time.time - startTime;
         if (age > Lifetime) {
             host.SetActive(false);
@@ -233,6 +242,13 @@ internal sealed class BoltEffect : IDisposable {
         float glow = 0.18f * (1 - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(Lifetime * 0.55f, Lifetime, age)));
         level = Mathf.Max(level, glow);
         Brightness = level * power;
+
+        float distance = Vector3.Distance(eye, (Top + Ground) / 2);
+        float widening = Mathf.Max(1, distance * WidthPerDistance / MainWidth);
+        mainLine.widthMultiplier = channelWidth * widening;
+        foreach (LineRenderer branch in branchLines) {
+            branch.widthMultiplier = BranchWidth * widening;
+        }
 
         Color lineColor = new Color(1, 1, 1, Mathf.Clamp01(level * 1.4f));
         mainLine.startColor = lineColor;
