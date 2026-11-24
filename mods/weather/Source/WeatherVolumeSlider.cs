@@ -114,6 +114,10 @@ internal sealed class WeatherVolumeSlider : MonoBehaviour {
         settings = weatherSettings;
         Slider slider = GetComponentInChildren<Slider>(includeInactive: true);
         slider.onValueChanged = new Slider.SliderEvent();
+        // The Warning slider it copies runs past 1, but a sound cannot play louder than its full volume, so this one
+        // runs from silent to full.
+        slider.minValue = 0;
+        slider.maxValue = 1;
         slider.SetValueWithoutNotify(settings.Volume);
         slider.onValueChanged.AddListener(OnValueChanged);
 

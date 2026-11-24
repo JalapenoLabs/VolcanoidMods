@@ -23,6 +23,7 @@ internal sealed class WeatherSettings {
     const string FileName = "settings.json";
 
     readonly string path;
+    float volume;
 
     WeatherSettings(string path, float volume) {
         this.path = path;
@@ -30,7 +31,10 @@ internal sealed class WeatherSettings {
     }
 
     /// <summary>How loud every weather sound plays, 0 (silent) to 1 (as made), under the master volume.</summary>
-    public float Volume { get; set; }
+    public float Volume {
+        get => volume;
+        set => volume = Mathf.Clamp01(value);
+    }
 
     /// <summary>Reads the settings from the mod's data folder, or starts from the defaults if there are none.</summary>
     public static WeatherSettings Load(string directory) {
