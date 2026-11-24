@@ -23,7 +23,7 @@ Friends who also run the mod get [b]the same storms at the same moment, down to 
 Lightning only does damage when the host has the mod (the game applies damage on the host). It hurts the host's character and COGs; friends who join see the same bolts without taking damage.
 [h2]Good to know[/h2]
 [list]
-[*]Works with [b]Day/Night Cycle[/b]: storms come by day and by night, and storm clouds hide the moon and stars.
+[*]Works with [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3842322377][b]Day/Night Cycle[/b][/url]: storms come by day and by night, and storm clouds hide the moon and stars.
 [*]Loading a save made without the mod shows the game's mod-mismatch dialog: choose [b]Continue[/b] to play it with the weather on.
 [*]The weather runs on real time: storms keep coming while the game is paused, and a save does not remember its weather.
 [*]Armour soaks up a strike like any other hit, and being under a roof keeps you safe from lightning entirely.

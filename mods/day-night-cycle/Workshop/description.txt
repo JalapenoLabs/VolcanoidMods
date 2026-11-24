@@ -10,7 +10,7 @@ Friends who also run the mod see [b]the same sky at the same moment[/b], even if
 [*]Day and night lengths are fixed and unrelated to the eruption timer.
 [*]The clock is real time: the sky keeps turning while the game is paused, and a save does not remember its time of day.
 [*]Whenever the game dims its sun (as eruption ash does), the moon and stars dim with it.
-[*]Works with [b]Rain & Thunderstorms[/b]: storm clouds hide the stars, the moon and its light.
+[*]Works with [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3845333600][b]Rain & Thunderstorms[/b][/url]: storm clouds hide the stars, the moon and its light.
 [/list]
 [h2]Links[/h2]
 [list]

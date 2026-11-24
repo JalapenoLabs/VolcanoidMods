@@ -1,6 +1,6 @@
 # Rain & Thunderstorms
 
-[Releases](https://github.com/JalapenoLabs/VolcanoidMods/releases?q=weather) · [Patreon](https://www.jalapenolabs.io/patreon)
+**[Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3845333600)** · [Releases](https://github.com/JalapenoLabs/VolcanoidMods/releases?q=weather) · [Patreon](https://www.jalapenolabs.io/patreon)
 
 A Volcanoids mod that brings **rain and thunderstorms** to the island.
 
@@ -33,8 +33,8 @@ Underground, all of it stops: no rain, no thunder, no darkened light. It all com
 
 ## Install
 
-- **Steam Workshop (recommended):** subscribe on the Workshop, then turn it on in the game's Mods menu. Steam keeps it
-  up to date.
+- **Steam Workshop (recommended):** [subscribe on the Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3845333600), then turn it on in the game's Mods
+  menu. Steam keeps it up to date.
 - **By hand:** download the zip from the [latest release](https://github.com/JalapenoLabs/VolcanoidMods/releases?q=weather)
   and unzip it into the game's `LocalMods` folder, so you get `LocalMods/Weather/`
   (Windows: `%USERPROFILE%\AppData\LocalLow\Volcanoid\Volcanoids\LocalMods`,

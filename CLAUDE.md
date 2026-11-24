@@ -39,7 +39,7 @@ docs/                  one document per area of decisions
 | Mod | Shipped folder | Multiplayer mode | Notes |
 | --- | --- | --- | --- |
 | `day-night-cycle` | `DayNightCycle` | ClientOnly (2) | 30 min day / 20 min night, hardcoded; synced by UTC + Steam time. Workshop item in `Workshop/item-id` |
-| `weather` | `Weather` | ClientOnly (2) | Rain & Thunderstorms: a storm an hour (light, heavy or thunder), synced by UTC + Steam time; lightning damages on the host only. Not yet on the Workshop |
+| `weather` | `Weather` | ClientOnly (2) | Rain & Thunderstorms: a storm an hour (light, heavy or thunder), synced by UTC + Steam time; lightning damages on the host only. Workshop item in `Workshop/item-id` |
 
 ## Key conventions and constraints
 
