@@ -192,7 +192,7 @@ internal sealed class WeatherController : MonoBehaviour {
             audio?.Update(weather.Rain, gustingSpeed, surface, location.Outdoors, eye);
             clouds?.Update(in weather, now, eye, surface);
             shelters.Update(eye);
-            rain?.Update(weather.Rain, windVelocity, eye, surface);
+            rain?.Update(weather.Rain, windVelocity, eye, surface, Time.deltaTime);
             rain?.SetVisible(shelters.Holding(eye) == null);
             lightning?.Update(in weather, now, viewCamera, location, audio);
             puddles?.Update(weather.Wetness, weather.Rain, eye, surface, Time.deltaTime);
@@ -280,6 +280,7 @@ internal sealed class WeatherController : MonoBehaviour {
     public void LogBaseline(string when) {
         float baseline = RenderSettings.ambientProbe[0, 0];
         string partsReport = puddles != null ? $", {puddles.Describe()}" : "";
+        partsReport += rain != null ? $", {rain.Describe()}" : "";
         partsReport += hullRain != null ? $", {hullRain.Describe()}" : "";
         partsReport += lensRain != null ? $", {lensRain.Describe()}" : "";
         partsReport += wind != null ? $", {wind.Describe()}, gust {weather.Gust:0.00}" : "";

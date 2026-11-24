@@ -1,6 +1,7 @@
 // Copyright © 2026 Jalapeno Labs
 
 using System;
+using JalapenoLabs.Weather.Forecast;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -9,12 +10,16 @@ namespace JalapenoLabs.Weather.Visuals;
 /// <summary>
 /// The rain itself: drops falling around the camera and splashing where they land, and a wider veil of rain beyond.
 ///
-/// Near drops are stretched particles that fall from a box above the camera, blown by the storm's wind. They collide
-/// with the world (terrain, rocks, buildings, drillships), so a roof keeps them off whoever is under it, and burst into
-/// a splash wherever they hit: rain spatters across the ground and drums visibly on every drillship's roof and modules.
-/// Farther out, a wider, sparser layer of longer drops fills the distance; it skips collision, since anything that
-/// falls through the ground there is hidden by the ground itself, and the fog softens it. Everything is drawn with the
-/// game's lit smoke shader, so the rain is dark under a dark sky and sparkles in a lamp's light or a lightning flash.
+/// Near drops are stretched particles that fall from a box above the camera, blown by the storm's wind, and end on the
+/// first thing below them (ground, rock, roof, a drillship's hull, or the sea) in a splash: rain spatters across the
+/// ground, drums visibly on every drillship, and a roof keeps it off whoever is under it. Each drop's landing is found
+/// once, as it is made, by one ray cast along its fall, and it is given just the life to fall that far; its death
+/// throws up the splash. Unity's own particle collision did the same job by testing every falling drop against the
+/// world every frame, which cost twelve milliseconds a frame in the rain (measured) whatever the number of drops.
+///
+/// Farther out, a wider, sparser layer of longer drops fills the distance; it lands nowhere, since anything that falls
+/// through the ground there is hidden by the ground itself, and the fog softens it. Everything is drawn with the game's
+/// lit smoke shader, so the rain is dark under a dark sky and sparkles in a lamp's light or a lightning flash.
 /// </summary>
 internal sealed class RainFall : IDisposable {
     const float FallSpeed = 11;
@@ -29,6 +34,21 @@ internal sealed class RainFall : IDisposable {
     const float NearLifetime = 2.4f;
     const float NearArea = 56;
     const float NearHeight = 22;
+
+    /// <summary>
+    /// The longest a near drop may fall looking for somewhere to land, so drops over a cliff edge still reach the
+    /// ground far below. A drop with nowhere to land in that time falls as a far drop instead.
+    /// </summary>
+    const float LongestFallSeconds = 8;
+
+    /// <summary>A drop dies this far short of landing, so its splash stands on the surface rather than in it.</summary>
+    const float LandingMargin = 0.1f;
+
+    /// <summary>Where the sea is, which no ray can hit: the ocean has no collider.</summary>
+    const float SeaLevel = 0;
+
+    const float SmallestNearDrop = 0.012f;
+    const float LargestNearDrop = 0.022f;
 
     const float FarDropsPerSecond = 2600;
     const float FarLifetime = 5.5f;
@@ -45,6 +65,11 @@ internal sealed class RainFall : IDisposable {
     readonly Material sprayMaterial;
     readonly ParticleSystemRenderer[] renderers;
     bool isShown = true;
+    float nearBudget;
+    /// <summary>For developer logs: near drops made since the last report, and how many had nowhere to land.</summary>
+    int dropsMade;
+    int dropsUnlanded;
+    StormRandom random = new StormRandom(0x2A1D_D20FUL);
 
     public RainFall(Transform parent, StormTextures textures) {
         dropMaterial = GameMaterials.CloneLitSmoke("rain");
@@ -67,9 +92,22 @@ internal sealed class RainFall : IDisposable {
         host.transform.SetParent(parent, false);
         // Wider than real drops: on screen a real 3 mm drop is a sub-pixel blur, so games draw the streak it smears
         // into instead. Far drops are wider again, so they still show at a distance.
-        nearDrops = CreateDrops("NearDrops", NearDropsPerSecond, NearLifetime, NearArea, 0.012f, 0.022f, 0.06f);
+        nearDrops = CreateDrops(
+            "NearDrops",
+            NearDropsPerSecond,
+            LongestFallSeconds,
+            NearArea,
+            SmallestNearDrop,
+            LargestNearDrop,
+            0.06f
+        );
         farDrops = CreateDrops("FarDrops", FarDropsPerSecond, FarLifetime, FarArea, 0.04f, 0.07f, 0.09f);
-        ConfigureCollision(nearDrops);
+        // Near drops are made one by one, each with its own fall and life (see EmitNearDrops).
+        ParticleSystem.VelocityOverLifetimeModule nearVelocity = nearDrops.velocityOverLifetime;
+        nearVelocity.enabled = false;
+        // Room for its own drops and for every near drop with nowhere to land, as around a camera high in the air.
+        ParticleSystem.MainModule farMain = farDrops.main;
+        farMain.maxParticles = (int)((FarDropsPerSecond * FarLifetime + NearDropsPerSecond * NearLifetime) * 1.1f);
 
         var splashObject = new GameObject("Splashes") { layer = Layers.MainZone };
         splashObject.transform.SetParent(nearDrops.transform, false);
@@ -83,15 +121,16 @@ internal sealed class RainFall : IDisposable {
         ConfigureSpray();
         ParticleSystem.SubEmittersModule subEmitters = nearDrops.subEmitters;
         subEmitters.enabled = true;
+        // A near drop dies the moment it lands, so its death is its impact.
         subEmitters.AddSubEmitter(
             splashes,
-            ParticleSystemSubEmitterType.Collision,
+            ParticleSystemSubEmitterType.Death,
             ParticleSystemSubEmitterProperties.InheritNothing
         );
         // Now and then a drop's impact leaves a wisp of spray: in a downpour, every surface it hits smokes with it.
         subEmitters.AddSubEmitter(
             spray,
-            ParticleSystemSubEmitterType.Collision,
+            ParticleSystemSubEmitterType.Death,
             ParticleSystemSubEmitterProperties.InheritNothing,
             SprayChance
         );
@@ -103,6 +142,15 @@ internal sealed class RainFall : IDisposable {
         };
         nearDrops.Play();
         farDrops.Play();
+    }
+
+    /// <summary>For developer logs: what the rain has in the air, and where its drops have been landing.</summary>
+    public string Describe() {
+        string report = $"rain: {nearDrops.particleCount} near drops, {farDrops.particleCount} far drops, "
+            + $"{dropsUnlanded} of {dropsMade} new near drops with nowhere to land";
+        dropsMade = 0;
+        dropsUnlanded = 0;
+        return report;
     }
 
     /// <summary>
@@ -167,23 +215,6 @@ internal sealed class RainFall : IDisposable {
         renderer.receiveShadows = false;
         GameMaterials.UseLitSmokeStreams(renderer);
         return system;
-    }
-
-    static void ConfigureCollision(ParticleSystem system) {
-        ParticleSystem.CollisionModule collision = system.collision;
-        collision.enabled = true;
-        collision.type = ParticleSystemCollisionType.World;
-        collision.mode = ParticleSystemCollisionMode.Collision3D;
-        collision.quality = ParticleSystemCollisionQuality.Medium;
-        collision.collidesWith = Layers.MaskToolRaycast;
-        collision.lifetimeLoss = 1;
-        collision.bounce = 0;
-        collision.dampen = 1;
-        collision.radiusScale = 0.2f;
-        collision.enableDynamicColliders = true;
-        // Medium quality only weighs this many nearby collision shapes, terrain first; a fully built drillship alone
-        // has hundreds, and past the limit the rain would fall straight through its hull.
-        collision.maxCollisionShapes = 2048;
     }
 
     void ConfigureSplashes() {
@@ -279,12 +310,86 @@ internal sealed class RainFall : IDisposable {
     /// <param name="wind">The wind's velocity, metres per second.</param>
     /// <param name="centre">The camera's position; the rain falls around it.</param>
     /// <param name="surface">0 underground, 1 on the surface.</param>
-    public void Update(float rain, Vector3 wind, Vector3 centre, float surface) {
+    public void Update(float rain, Vector3 wind, Vector3 centre, float surface, float deltaTime) {
         float strength = rain * surface;
         // Drops are heavy for their size; gusts lean them over, but less than the air moves.
         wind *= WindDrag;
-        Follow(nearDrops, NearDropsPerSecond * strength, NearHeight, wind, centre);
+        nearBudget += NearDropsPerSecond * strength * deltaTime;
+        EmitNearDrops(wind, centre);
         Follow(farDrops, FarDropsPerSecond * strength, FarHeight, wind, centre);
+    }
+
+    /// <summary>
+    /// Makes this frame's share of near drops. Each starts at a random spot in the box above the camera (upwind of it,
+    /// so drops blown sideways as they fall still land around it), and one ray along its fall finds where it lands; it
+    /// lives exactly as long as it takes to get there.
+    /// </summary>
+    void EmitNearDrops(Vector3 wind, Vector3 centre) {
+        if (nearBudget < 1) {
+            return;
+        }
+        float fallTime = NearHeight / FallSpeed;
+        Vector3 boxCentre = centre + Vector3.up * NearHeight - wind * fallTime;
+        float half = NearArea / 2;
+        var emit = new ParticleSystem.EmitParams();
+        while (nearBudget >= 1) {
+            nearBudget--;
+            var start = new Vector3(
+                boxCentre.x + random.Range(-half, half),
+                boxCentre.y,
+                boxCentre.z + random.Range(-half, half)
+            );
+            Vector3 velocity = wind + Vector3.down * (FallSpeed * random.Range(0.9f, 1.1f));
+            float speed = velocity.magnitude;
+            float? fallSeconds = LandingTime(start, velocity, speed);
+            dropsMade++;
+            if (!fallSeconds.HasValue) {
+                dropsUnlanded++;
+                // Nowhere to land in reach (a camera high above the ground): it falls as a far drop, which ends in the
+                // air without a splash, as all rain far from the ground does.
+                var falling = new ParticleSystem.EmitParams {
+                    position = start,
+                    velocity = Vector3.zero,
+                    startLifetime = NearLifetime,
+                    startSize = random.Range(SmallestNearDrop, LargestNearDrop),
+                };
+                farDrops.Emit(falling, 1);
+                continue;
+            }
+            emit.position = start;
+            emit.velocity = velocity;
+            emit.startLifetime = fallSeconds.Value;
+            emit.startSize = random.Range(SmallestNearDrop, LargestNearDrop);
+            nearDrops.Emit(emit, 1);
+        }
+    }
+
+    /// <summary>
+    /// How long a drop falls before it lands on something solid or on the sea, or null if it would land nowhere
+    /// within <see cref="LongestFallSeconds"/>.
+    /// </summary>
+    static float? LandingTime(Vector3 start, Vector3 velocity, float speed) {
+        bool isLanding = Physics.Raycast(
+            start,
+            velocity / speed,
+            out RaycastHit hit,
+            speed * LongestFallSeconds,
+            Layers.MaskToolRaycast,
+            QueryTriggerInteraction.Ignore
+        );
+        float distance;
+        if (isLanding) {
+            distance = hit.distance;
+        } else if (start.y > SeaLevel && velocity.y < 0) {
+            distance = (start.y - SeaLevel) / -velocity.y * speed;
+        } else {
+            return null;
+        }
+        float seconds = Mathf.Max(0, distance - LandingMargin) / speed;
+        if (seconds > LongestFallSeconds) {
+            return null;
+        }
+        return seconds;
     }
 
     static void Follow(ParticleSystem system, float rate, float height, Vector3 wind, Vector3 centre) {
