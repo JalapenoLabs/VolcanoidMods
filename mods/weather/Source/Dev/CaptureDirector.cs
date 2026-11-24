@@ -29,11 +29,14 @@ internal sealed class CaptureDirector : MonoBehaviour {
         public readonly string Name;
         public readonly Func<Pose?> Pose;
         public readonly float? FieldOfView;
+        /// <summary>Whether the view stands out in the open; a lifted camera does unless it says otherwise.</summary>
+        public readonly bool IsInOpen;
 
-        public View(string name, Func<Pose?> pose, float? fieldOfView) {
+        public View(string name, Func<Pose?> pose, float? fieldOfView, bool isInOpen = true) {
             Name = name;
             Pose = pose;
             FieldOfView = fieldOfView;
+            IsInOpen = isInOpen;
         }
     }
 
@@ -146,8 +149,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                 Pose? pose = view.Pose();
                 liftedPose = pose;
                 liftedFieldOfView = view.FieldOfView;
-                // A lifted camera stands out in the open, whatever the player is doing.
-                controller.Location.Override = pose.HasValue ? Exposure.Outside : (Exposure?)null;
+                // A lifted camera stands out in the open, whatever the player is doing, unless it is a view from the
+                // player's own spot (the ceiling view), where the player's real shelter counts.
+                controller.Location.Override = pose.HasValue && view.IsInOpen ? Exposure.Outside : (Exposure?)null;
                 controller.EyeOverride = pose?.position;
                 controller.IsLensRainForced = view.Name == "lens";
                 if (pose.HasValue) {
@@ -201,6 +205,20 @@ internal sealed class CaptureDirector : MonoBehaviour {
         float slow = frameMilliseconds[count * 95 / 100];
         Debug.Log($"{WeatherMod.LogPrefix}Frame times, {shotLabel} {viewName}: median {median:0.0} ms, "
             + $"95th percentile {slow:0.0} ms, worst {frameMilliseconds[count - 1]:0.0} ms over {count} frames");
+    }
+
+    /// <summary>
+    /// The ceiling view: from where the player's camera stands, tilted up steeply, as a player looks up at a cabin's
+    /// roof, which is where rain that gets inside shows.
+    /// </summary>
+    Pose? LookUpFromCamera() {
+        Transform camera = screenCamera.transform;
+        Vector3 heading = Vector3.ProjectOnPlane(camera.forward, Vector3.up).normalized;
+        if (heading.sqrMagnitude < 0.01f) {
+            heading = Vector3.forward;
+        }
+        Quaternion lookingUp = Quaternion.LookRotation(heading) * Quaternion.Euler(-60, 0, 0);
+        return new Pose(camera.position, lookingUp);
     }
 
     /// <summary>The fly view starts above the focus, looking along the ground towards the volcano.</summary>
@@ -294,6 +312,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                     break;
                 case "lens":
                     views.Add(new View(name, () => LookTowardsVolcano(focus), IslandViewFieldOfView));
+                    break;
+                case "ceiling":
+                    views.Add(new View(name, LookUpFromCamera, null, isInOpen: false));
                     break;
                 case "fly":
                     views.Add(new View(name, () => FlyStart(focus), IslandViewFieldOfView));

@@ -43,8 +43,10 @@ internal sealed class RainFall : IDisposable {
     readonly Material splashMaterial;
     readonly ParticleSystem spray;
     readonly Material sprayMaterial;
+    readonly ParticleSystemRenderer[] renderers;
+    bool isShown = true;
 
-    public RainFall(Transform parent, StormTextures textures, ShelterVolumes shelters) {
+    public RainFall(Transform parent, StormTextures textures) {
         dropMaterial = GameMaterials.CloneLitSmoke("rain");
         if (dropMaterial == null) {
             throw new InvalidOperationException("the game has no lit smoke material to build on");
@@ -93,17 +95,28 @@ internal sealed class RainFall : IDisposable {
             ParticleSystemSubEmitterProperties.InheritNothing,
             SprayChance
         );
-        // However the drops get in (the far rain has no collision, the near rain's is approximate), none survive inside
-        // a cabin or a shelter.
-        shelters.Guard(nearDrops);
-        shelters.Guard(farDrops);
+        renderers = new[] {
+            nearDrops.GetComponent<ParticleSystemRenderer>(),
+            farDrops.GetComponent<ParticleSystemRenderer>(),
+            splashes.GetComponent<ParticleSystemRenderer>(),
+            spray.GetComponent<ParticleSystemRenderer>(),
+        };
         nearDrops.Play();
         farDrops.Play();
     }
 
-    /// <summary>For developer logs: drops inside sheltered spaces right now, which should be none.</summary>
-    public int CountDropsInside(ShelterVolumes shelters) {
-        return shelters.CountInside(nearDrops) + shelters.CountInside(farDrops);
+    /// <summary>
+    /// Shows or hides the rain without stopping it (see <see cref="ShelterVolumes"/>): inside a cabin it is hidden,
+    /// so no drop that slipped through the roof shows, and it keeps falling so that stepping outside shows it at once.
+    /// </summary>
+    public void SetVisible(bool isVisible) {
+        if (isVisible == isShown) {
+            return;
+        }
+        isShown = isVisible;
+        foreach (ParticleSystemRenderer renderer in renderers) {
+            renderer.enabled = isVisible;
+        }
     }
 
     ParticleSystem CreateDrops(

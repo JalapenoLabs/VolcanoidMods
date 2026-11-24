@@ -45,7 +45,7 @@ internal sealed class WindDebris : IDisposable {
     float leafBudget;
     StormRandom random = new StormRandom(0x1EAF_5UL);
 
-    public WindDebris(Transform parent, StormTextures textures, ShelterVolumes shelters) {
+    public WindDebris(Transform parent, StormTextures textures) {
         leafMaterial = GameMaterials.CloneLitSmoke("wind-blown leaves");
         wispMaterial = GameMaterials.CloneLitSmoke("wind-blown spray");
         if (leafMaterial == null || wispMaterial == null) {
@@ -70,8 +70,6 @@ internal sealed class WindDebris : IDisposable {
         host.transform.SetParent(parent, false);
         leaves = CreateLeaves();
         wisps = CreateWisps();
-        shelters.Guard(leaves);
-        shelters.Guard(wisps);
     }
 
     ParticleSystem CreateLeaves() {

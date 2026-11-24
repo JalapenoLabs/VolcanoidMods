@@ -158,7 +158,7 @@ internal sealed class WeatherController : MonoBehaviour {
             return;
         }
         clouds = Own(Start(() => new CloudDeck(transform, textures)));
-        rain = Own(Start(() => new RainFall(transform, textures, shelters)));
+        rain = Own(Start(() => new RainFall(transform, textures)));
         lightning = Own(Start(() => new LightningStrikes(transform, textures)));
         List<LavaPool> lavaPools = LavaPools.FindOnSurface();
         puddles = Own(Start(() => new Puddles(transform, textures, lavaPools)));
@@ -167,7 +167,7 @@ internal sealed class WeatherController : MonoBehaviour {
         hullRain = Own(Start(() => new HullRain(transform, textures, drillshipExteriors)));
         steam = Own(Start(() => new LavaSteam(gameObject.scene, textures, lavaPools)));
         wind = Own(Start(() => new StormWind(transform, drillshipExteriors)));
-        windDebris = Own(Start(() => new WindDebris(transform, textures, shelters)));
+        windDebris = Own(Start(() => new WindDebris(transform, textures)));
         if (devOptions.TreeWindQuality != null) {
             treeWindTest = Own(Start(() => new Dev.TreeWindTest(devOptions.TreeWindQuality)));
         }
@@ -193,6 +193,7 @@ internal sealed class WeatherController : MonoBehaviour {
             clouds?.Update(in weather, now, eye, surface);
             shelters.Update(eye);
             rain?.Update(weather.Rain, windVelocity, eye, surface);
+            rain?.SetVisible(shelters.Holding(eye) == null);
             lightning?.Update(in weather, now, viewCamera, location, audio);
             puddles?.Update(weather.Wetness, weather.Rain, eye, surface, Time.deltaTime);
             lensRain?.Update(
@@ -230,10 +231,10 @@ internal sealed class WeatherController : MonoBehaviour {
         if (lightning == null || weather.Electric <= 0) {
             return false;
         }
-        // A few hundred metres ahead and a little to the side, so the bolt stands clear of the frame's centre.
+        // Ahead (380 m unless -weather-strike-distance says) and a little to the side, clear of the frame's centre.
         Vector3 ahead = Vector3.ProjectOnPlane(view.rotation * Vector3.forward, Vector3.up).normalized;
         Vector3 side = Vector3.Cross(Vector3.up, ahead);
-        Vector3 spot = view.position + ahead * 380 + side * 90;
+        Vector3 spot = view.position + ahead * devOptions.StrikeDistance + side * 90;
         lightning.StrikeNow(spot, clock.Now, viewCamera, location, audio);
         return true;
     }
@@ -283,9 +284,11 @@ internal sealed class WeatherController : MonoBehaviour {
         partsReport += lensRain != null ? $", {lensRain.Describe()}" : "";
         partsReport += wind != null ? $", {wind.Describe()}, gust {weather.Gust:0.00}" : "";
         partsReport += windDebris != null ? $", {windDebris.Describe()}" : "";
-        partsReport += rain != null
-            ? $", {shelters.Count} sheltered spaces near, {rain.CountDropsInside(shelters)} drops inside them"
-            : "";
+        Vector3 eye = EyeOverride ?? (viewCamera != null ? viewCamera.transform.position : Vector3.zero);
+        Collider enclosure = shelters.Holding(eye);
+        partsReport += enclosure != null
+            ? $", the camera in '{enclosure.name}' (rain hidden) of {shelters.Count} enclosed spaces near"
+            : $", the camera out under the sky, {shelters.Count} enclosed spaces near";
         // The fog the game last applied (FogRenderPass reads this same stack), storm included.
         var fog = VolumeManager.instance.stack.GetComponent<UnityEngine.Rendering.Universal.Fog>();
         partsReport += fog != null ? $", fog {fog.mode.value} {fog.density.value:0.0000} {fog.color.value}" : "";

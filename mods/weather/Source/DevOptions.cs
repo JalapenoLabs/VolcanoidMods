@@ -20,8 +20,8 @@ namespace JalapenoLabs.Weather;
 ///   -weather-speed 10           run the weather 10 times faster (from the -weather-at moment, if given)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
-///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player, fly); default
-///                               all but fly
+///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player, fly, ceiling);
+///                               default all but fly and ceiling (the player's own spot, looking up)
 ///                               (lens: the island view with the raindrops on the lens shown, though the HUD is off)
 ///   -weather-dump-sounds DIR    write every synthesised sound as a WAV file into DIR
 ///   -weather-survey             log the game's particle materials, water and lava, for building the storm's effects
@@ -33,6 +33,8 @@ namespace JalapenoLabs.Weather;
 ///   -weather-skip LIST          leave out parts of the storm by class name ("LavaSteam,StormSea"), to see what each
 ///                               one contributes
 ///   -weather-in-gust            with a capture, move each moment on to the next full gust of wind
+///   -weather-strike-distance M  with a capture, bring the thunderstorm shots' bolt down this far ahead (default 380 m;
+///                               natural strikes mostly land a kilometre or more away)
 ///   -weather-keys               numpad hotkeys to call up weather on the spot (see Dev/DevHotkeys.cs)
 ///   -weather-perf               with a capture, run the frame rate uncapped and log each view's frame times; the
 ///                               "fly" view moves the camera across the island as the cinematic camera does
@@ -65,7 +67,9 @@ internal sealed class DevOptions {
         [StormKind.Thunderstorm] = "thunder",
     };
 
-    static readonly string[] AllViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player", "fly" };
+    static readonly string[] AllViews = {
+        "island", "sky", "drillship", "deck", "hull", "lens", "player", "fly", "ceiling",
+    };
 
     /// <summary>The fly view only means something when measuring performance, so it is asked for by name.</summary>
     static readonly string[] DefaultViews = { "island", "sky", "drillship", "deck", "hull", "lens", "player" };
@@ -89,6 +93,8 @@ internal sealed class DevOptions {
     public readonly HashSet<string> SkippedParts;
     /// <summary>Whether captures wait for a full gust, to photograph the wind at its height.</summary>
     public readonly bool IsSeekingGusts;
+    /// <summary>How far ahead a capture's staged bolt lands, in metres (-weather-strike-distance).</summary>
+    public readonly float StrikeDistance;
     /// <summary>Whether the numpad calls up weather (-weather-keys).</summary>
     public readonly bool HasHotkeys;
     /// <summary>Whether captures measure frame times, uncapped (-weather-perf).</summary>
@@ -110,6 +116,7 @@ internal sealed class DevOptions {
         bool isTestingDamage,
         HashSet<string> skippedParts,
         bool isSeekingGusts,
+        float strikeDistance,
         bool hasHotkeys,
         bool isMeasuringPerformance,
         string treeWindQuality
@@ -127,6 +134,7 @@ internal sealed class DevOptions {
         IsTestingDamage = isTestingDamage;
         SkippedParts = skippedParts;
         IsSeekingGusts = isSeekingGusts;
+        StrikeDistance = strikeDistance;
         HasHotkeys = hasHotkeys;
         IsMeasuringPerformance = isMeasuringPerformance;
         TreeWindQuality = treeWindQuality;
@@ -191,6 +199,10 @@ internal sealed class DevOptions {
                 StringComparer.OrdinalIgnoreCase
             ),
             isSeekingGusts: Array.IndexOf(arguments, "-weather-in-gust") >= 0,
+            strikeDistance: (float)(ParseNumber(
+                ReadValue(arguments, "-weather-strike-distance"),
+                "-weather-strike-distance"
+            ) ?? 380),
             hasHotkeys: Array.IndexOf(arguments, "-weather-keys") >= 0,
             isMeasuringPerformance: Array.IndexOf(arguments, "-weather-perf") >= 0,
             treeWindQuality: ReadValue(arguments, "-weather-tree-wind")?.Trim().ToUpperInvariant()
