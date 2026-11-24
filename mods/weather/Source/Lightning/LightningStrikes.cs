@@ -99,8 +99,8 @@ internal sealed class LightningStrikes : IDisposable {
     /// The bolts' channels. They draw with Unity's built-in Sprites/Default shader, which the game ships and which
     /// takes no fog: through storm fog every particle shader fades a bolt a kilometre off to nothing (the game's fog
     /// at storm density hides 98% of what lies that far), yet real lightning shows through rain for kilometres, and
-    /// strikes land anywhere on the island. The shader still tests depth, so hills hide what is behind them. Its colour is far
-    /// brighter than white, so the bloom catches the bolt.
+    /// strikes land anywhere on the island. The shader still tests depth, so hills hide what is behind them. Its colour
+    /// is far brighter than white, so the bloom catches the bolt.
     /// </summary>
     static Material CreateBoltMaterial(StormTextures textures, Material fallback) {
         Shader shader = Shader.Find(BoltShaderName);
