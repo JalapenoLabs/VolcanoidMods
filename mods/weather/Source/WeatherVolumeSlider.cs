@@ -18,6 +18,10 @@ namespace JalapenoLabs.Weather;
 /// replaced outright, so nothing the original row was wired to comes along, and the label's localisation component is
 /// removed, so a language change cannot rename it back. The value applies at once and is saved when the options screen
 /// closes; the game's Cancel button does not undo it, since the game's options code knows nothing about it.
+///
+/// The options screen does not exist until it is opened (menus instantiate it from a prefab, and nothing in the game's
+/// code names it), so <see cref="OptionsWatcher"/> looks for a newly opened one a few times a second, for the whole
+/// session.
 /// </summary>
 internal sealed class WeatherVolumeSlider : MonoBehaviour {
     const string Label = "Weather";
@@ -30,26 +34,47 @@ internal sealed class WeatherVolumeSlider : MonoBehaviour {
     WeatherSettings settings;
     bool hasChanged;
 
-    /// <summary>Adds the slider to every options screen in the game that does not have one yet.</summary>
-    public static void AddToOptionsScreens(WeatherSettings settings) {
-        if (WarningVolumeField == null) {
-            Debug.LogWarning($"{WeatherMod.LogPrefix}The game's options screen has no Warning volume slider any more; "
-                + "the Weather volume slider is left out");
-            return;
-        }
+    /// <summary>Whether the game's options screen still has the Warning volume slider this copies.</summary>
+    public static bool CanAdd => WarningVolumeField != null;
+
+    /// <summary>Adds the slider to every open options screen that does not have one yet.</summary>
+    public static void AddToOpenOptionsScreens(WeatherSettings settings) {
         OptionsUi[] screens = Object.FindObjectsByType<OptionsUi>(
-            FindObjectsInactive.Include,
+            FindObjectsInactive.Exclude,
             FindObjectsSortMode.None
         );
-        if (screens.Length == 0) {
-            Debug.Log($"{WeatherMod.LogPrefix}No options screen in this scene to add the Weather volume slider to");
-            return;
-        }
         foreach (OptionsUi screen in screens) {
             if (screen.GetComponentInChildren<WeatherVolumeSlider>(includeInactive: true) == null) {
                 AddTo(screen, settings);
             }
         }
+    }
+
+    /// <summary>
+    /// For developer captures, which cannot open the options screen: builds the slider on a hidden copy of the options
+    /// prefab and logs what it made, so a game update that moves the Warning volume row shows up in a smoke test.
+    /// </summary>
+    public static void TestOnPrefab(WeatherSettings settings) {
+        OptionsUi prefab = null;
+        foreach (OptionsUi candidate in Resources.FindObjectsOfTypeAll<OptionsUi>()) {
+            if (!candidate.gameObject.scene.IsValid()) {
+                prefab = candidate;
+                break;
+            }
+        }
+        if (prefab == null) {
+            Debug.Log($"{WeatherMod.LogPrefix}Slider test: no options prefab loaded in this scene to try");
+            return;
+        }
+        // Under an inactive parent, so the copy's own scripts never wake.
+        var holder = new GameObject("Weather.SliderTest");
+        holder.SetActive(false);
+        OptionsUi copy = Object.Instantiate(prefab, holder.transform);
+        AddTo(copy, settings);
+        WeatherVolumeSlider added = copy.GetComponentInChildren<WeatherVolumeSlider>(includeInactive: true);
+        string label = added != null ? added.GetComponentInChildren<TMP_Text>(includeInactive: true)?.text : null;
+        Debug.Log($"{WeatherMod.LogPrefix}Slider test: {(added != null ? $"added, labelled '{label}'" : "not added")}");
+        Destroy(holder);
     }
 
     static void AddTo(OptionsUi screen, WeatherSettings settings) {

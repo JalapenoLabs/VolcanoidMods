@@ -23,6 +23,12 @@ public sealed class WeatherMod : GameMod {
     public override void Load() {
         devOptions = DevOptions.FromCommandLine();
         settings = WeatherSettings.Load(PersistentDataDir);
+        if (WeatherVolumeSlider.CanAdd) {
+            OptionsWatcher.Begin(settings);
+        } else {
+            Debug.LogWarning($"{LogPrefix}The game's options screen has no Warning volume slider any more; "
+                + "the Weather volume slider is left out");
+        }
         Debug.Log($"{LogPrefix}Loaded version {Owner.Manifest.Version}, weather volume {settings.Volume:0.00}. "
             + devOptions.Describe());
         PrepareCaptureRun();
@@ -30,7 +36,6 @@ public sealed class WeatherMod : GameMod {
 
     public override void OnMainMenuLoaded(Scene mainMenuScene) {
         PrepareCaptureRun();
-        WeatherVolumeSlider.AddToOptionsScreens(settings);
     }
 
     public override void OnGameLoading(Scene gameScene, AsyncOperation gameSceneLoadOperation) {
@@ -39,7 +44,9 @@ public sealed class WeatherMod : GameMod {
 
     public override void OnGameLoaded(Scene gameScene) {
         PrepareCaptureRun();
-        WeatherVolumeSlider.AddToOptionsScreens(settings);
+        if (devOptions.IsCapturing && WeatherVolumeSlider.CanAdd) {
+            WeatherVolumeSlider.TestOnPrefab(settings);
+        }
         // The recorded rain ships in the mod's own folder, beside its assembly.
         string soundsDirectory = System.IO.Path.Combine(Owner.Path, "Sounds");
         WeatherController.Create(gameScene, new SyncedClock(devOptions), devOptions, settings, soundsDirectory);

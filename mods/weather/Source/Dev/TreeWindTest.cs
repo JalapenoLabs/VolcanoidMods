@@ -72,11 +72,22 @@ internal sealed class TreeWindTest : IDisposable {
             : Vector3.forward;
         // SpeedTree's wind clock runs faster in a stronger wind.
         windTime += deltaTime * (0.6f + 1.4f * strength);
-        Shader.SetGlobalVector(WindVectorId, new Vector4(direction.x, direction.y, direction.z, strength));
+        var windVector = new Vector4(direction.x, direction.y, direction.z, strength);
         // (time, sway distance, 1 / height the sway is measured over, how sharply the sway grows with height)
-        Shader.SetGlobalVector(WindGlobalId, new Vector4(windTime, 0.1f + 0.6f * strength, 0.05f, 1.8f));
+        var windGlobal = new Vector4(windTime, 0.1f + 0.6f * strength, 0.05f, 1.8f);
         // (how far the tree leans downwind regardless of the sway, unused here)
-        Shader.SetGlobalVector(WindBranchAdherencesId, new Vector4(0.3f * strength, 0, 0, 0));
+        var adherences = new Vector4(0.3f * strength, 0, 0, 0);
+        Shader.SetGlobalVector(WindVectorId, windVector);
+        Shader.SetGlobalVector(WindGlobalId, windGlobal);
+        Shader.SetGlobalVector(WindBranchAdherencesId, adherences);
+        // And on each material, in case the shader reads them per material rather than globally.
+        foreach ((Material material, LocalKeyword _, LocalKeyword _) in switched) {
+            if (material != null) {
+                material.SetVector(WindVectorId, windVector);
+                material.SetVector(WindGlobalId, windGlobal);
+                material.SetVector(WindBranchAdherencesId, adherences);
+            }
+        }
     }
 
     public void Dispose() {
