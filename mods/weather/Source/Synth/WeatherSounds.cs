@@ -152,8 +152,8 @@ public static class WeatherSounds {
 
     /// <summary>
     /// The sound of a strike a few hundred metres off, before its thunder rolls: a short tearing rip as the channel
-    /// forms, a hard crack with an electric zap in it, and a heavy boom that falls in pitch, with a few crackles over
-    /// it. It is built to have weight, low end above all: a burst of bright noise alone sounds like a cymbal being
+    /// forms, a hard crack with the arc's raspy buzz in it, and a heavy boom that falls in pitch, with a few crackles
+    /// over it. It is built to have weight, low end above all: a burst of bright noise alone sounds like a cymbal being
     /// tapped, not a strike.
     /// </summary>
     /// <param name="loudness">How loud the strike peaks: kept in proportion to the rolls, which follow it.</param>
@@ -212,7 +212,7 @@ public static class WeatherSounds {
                 + thumpWave;
         }
 
-        AddZap(ref random, strikeLeft, strikeRight, ripFrames);
+        AddArc(ref random, strikeLeft, strikeRight, ripFrames);
 
         // A few crackles over the boom: short mid-range bursts, not clicks of white noise.
         var crackleFilter = new Biquad(Biquad.Kind.BandPass, 1800, 1.2f, SampleRate);
@@ -244,27 +244,39 @@ public static class WeatherSounds {
     }
 
     /// <summary>
-    /// The zap at the crack: a buzzy tone diving from the upper mids into the bass in a few hundredths of a second,
-    /// fluttering a little as it goes, the electric edge of the strike. Its buzz is a sawtooth built from harmonics
-    /// kept below 5 kHz, so it buzzes without hissing.
+    /// The arc at the heart of the crack: the raspy "bzzzt" of the channel itself. It is no tone (a falling tone is a
+    /// laser's "pew") but a dense, irregular train of tiny sparks, bursts of noise firing about a hundred and twenty
+    /// times a second with no two gaps alike, over a harsh layer of clipped noise in the upper mids. It strikes with
+    /// the crack, holds a tenth of a second and is gone within a quarter. The top is rolled off, so it rasps without
+    /// hissing.
     /// </summary>
-    static void AddZap(ref StormRandom random, float[] left, float[] right, int start) {
-        const float HighestHarmonic = 5000;
-        float startPitch = random.Range(2200, 3000);
-        float endPitch = random.Range(140, 190);
-        int length = Math.Min(left.Length - start, (int)(0.28f * SampleRate));
-        double phase = 0;
+    static void AddArc(ref StormRandom random, float[] left, float[] right, int start) {
+        int length = Math.Min(left.Length - start, (int)(0.26f * SampleRate));
+        var sparkBand = new Biquad(Biquad.Kind.BandPass, 2300, 0.8f, SampleRate);
+        var harshBand = new Biquad(Biquad.Kind.BandPass, 1600, 0.6f, SampleRate);
+        var rollOff = new Biquad(Biquad.Kind.LowPass, 4500, 0.7f, SampleRate);
+        int nextSpark = 0;
+        int sparkFrames = 1;
+        int sparkLeft = 0;
+        float sparkLevel = 0;
         for (int offset = 0; offset < length; offset++) {
             float time = offset / (float)SampleRate;
-            float pitch = endPitch + (startPitch - endPitch) * (float)Math.Exp(-time / 0.045f);
-            phase += 2 * Math.PI * pitch / SampleRate;
-            float buzz = 0;
-            for (int harmonic = 1; harmonic <= 6 && harmonic * pitch < HighestHarmonic; harmonic++) {
-                buzz += (float)Math.Sin(phase * harmonic) / harmonic;
+            if (offset >= nextSpark) {
+                sparkFrames = (int)(random.Range(0.0015f, 0.003f) * SampleRate);
+                sparkLeft = sparkFrames;
+                sparkLevel = random.Range(0.5f, 1);
+                nextSpark = offset + (int)(SampleRate / random.Range(95, 150));
             }
-            float attack = Math.Min(1, time / 0.002f);
-            float flutter = 0.75f + 0.25f * (float)Math.Sin(2 * Math.PI * 70 * time);
-            float value = buzz * attack * (float)Math.Exp(-time / 0.07f) * flutter * 0.55f;
+            float gate = 0;
+            if (sparkLeft > 0) {
+                gate = sparkLevel * sparkLeft / (float)sparkFrames;
+                sparkLeft--;
+            }
+            float spark = sparkBand.Process(Dsp.White(ref random) * gate);
+            float harsh = Math.Max(-1, Math.Min(1, harshBand.Process(Dsp.White(ref random)) * 2.5f));
+            float onset = Math.Min(1, time / 0.003f);
+            float fade = time < 0.08f ? 1 : (float)Math.Exp(-(time - 0.08f) / 0.06f);
+            float value = rollOff.Process(spark * 2.2f + harsh * 0.3f) * onset * fade * 0.6f;
             left[start + offset] += value;
             right[start + offset] += value;
         }
