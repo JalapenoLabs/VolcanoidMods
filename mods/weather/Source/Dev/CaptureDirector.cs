@@ -304,6 +304,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                 case "sky":
                     views.Add(new View(name, () => LookUpAtClouds(focus), IslandViewFieldOfView));
                     break;
+                case "skyturn":
+                    views.Add(new View(name, () => TurnedRight(LookUpAtClouds(focus)), IslandViewFieldOfView));
+                    break;
                 case "drillship" when framing != null:
                     views.Add(new View(name, () => framing.FrameAlongSide(), ShowcaseCamera.FieldOfView));
                     break;
@@ -361,6 +364,14 @@ internal sealed class CaptureDirector : MonoBehaviour {
         // A negative turn about the camera's right axis tips its view up.
         Vector3 tilted = Quaternion.AngleAxis(-34, right) * forward;
         return new Pose(island.position, Quaternion.LookRotation(tilted));
+    }
+
+    /// <summary>
+    /// The same view turned 60 degrees to the right about the vertical, as a player looking up pans: compared with the
+    /// view before the turn, it shows whether the clouds hold still in the sky or roll with the camera.
+    /// </summary>
+    static Pose TurnedRight(Pose view) {
+        return new Pose(view.position, Quaternion.AngleAxis(60, Vector3.up) * view.rotation);
     }
 
     static Vector3 HighestGround() {

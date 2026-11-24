@@ -128,12 +128,14 @@ internal sealed class CloudDeck : IDisposable {
 
         puffRenderer = host.GetComponent<ParticleSystemRenderer>();
         puffRenderer.sharedMaterial = puffMaterial;
-        puffRenderer.renderMode = ParticleSystemRenderMode.Billboard;
-        // Each puff faces where the camera is, kept level with the world, rather than lining up with the camera's own
-        // tilt (Unity's default). A view-aligned puff turns with the camera, so looking up and panning made the whole
-        // sky of clouds rotate with the mouse; facing the camera's position, a puff only changes as the camera moves.
-        puffRenderer.alignment = ParticleSystemRenderSpace.Facing;
-        puffRenderer.allowRoll = false;
+        // Each puff is a flat square turned to face the camera yet kept upright in the world (see Orient). Every one
+        // of Unity's billboard alignments takes a puff's "up" from the camera, so looking up and panning rolled every
+        // puff with the mouse while the sky behind it turned the other way. A mesh drawn in World alignment uses
+        // each particle's own rotation as it stands.
+        puffRenderer.renderMode = ParticleSystemRenderMode.Mesh;
+        puffRenderer.mesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+        puffRenderer.alignment = ParticleSystemRenderSpace.World;
+        main.startRotation3D = true;
         puffRenderer.sortMode = ParticleSystemSortMode.Distance;
         puffRenderer.minParticleSize = 0;
         puffRenderer.maxParticleSize = 100;
@@ -206,7 +208,22 @@ internal sealed class CloudDeck : IDisposable {
                 };
             }
         }
+        Orient(count, centre);
         puffSystem.SetParticles(particles, count);
+    }
+
+    /// <summary>
+    /// Turns each puff to face <paramref name="eye"/>, upright. Unity's built-in quad faces back along its forward
+    /// axis, so pointing that axis away from the eye shows its face to it; LookRotation keeps its up as close to the
+    /// sky's as facing the eye allows. It depends only on where the eye is, so turning the head changes nothing.
+    /// </summary>
+    void Orient(int count, Vector3 eye) {
+        for (int index = 0; index < count; index++) {
+            Vector3 towardsPuff = particles[index].position - eye;
+            if (towardsPuff.sqrMagnitude > 0.0001f) {
+                particles[index].rotation3D = Quaternion.LookRotation(towardsPuff, Vector3.up).eulerAngles;
+            }
+        }
     }
 
     /// <summary>The storm's clouds, scattered through the field from its seed, each a heap of puffs.</summary>

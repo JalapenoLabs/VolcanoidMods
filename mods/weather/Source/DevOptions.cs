@@ -20,8 +20,9 @@ namespace JalapenoLabs.Weather;
 ///   -weather-speed 10           run the weather 10 times faster (from the -weather-at moment, if given)
 ///   -weather-capture DIR        after loading, screenshot each moment in -weather-shots into DIR, then quit
 ///   -weather-shots LIST         comma-separated moments: "light@0.5,heavy@0.5,thunder@-0.3,thunder@0.6"
-///   -weather-views LIST         views to capture (island, sky, drillship, deck, hull, lens, player, fly, ceiling);
-///                               default all but fly and ceiling (the player's own spot, looking up)
+///   -weather-views LIST         views to capture (island, sky, skyturn, drillship, deck, hull, lens, player, fly,
+///                               ceiling); default all but skyturn (the sky view panned 60 degrees right), fly and
+///                               ceiling (the player's own spot, looking up)
 ///                               (lens: the island view with the raindrops on the lens shown, though the HUD is off)
 ///   -weather-dump-sounds DIR    write every synthesised sound as a WAV file into DIR
 ///   -weather-survey             log the game's particle materials, water and lava, for building the storm's effects
@@ -68,7 +69,7 @@ internal sealed class DevOptions {
     };
 
     static readonly string[] AllViews = {
-        "island", "sky", "drillship", "deck", "hull", "lens", "player", "fly", "ceiling",
+        "island", "sky", "skyturn", "drillship", "deck", "hull", "lens", "player", "fly", "ceiling",
     };
 
     /// <summary>The fly view only means something when measuring performance, so it is asked for by name.</summary>
