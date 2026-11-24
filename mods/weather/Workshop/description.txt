@@ -35,3 +35,5 @@ Lightning only does damage when the host has the mod (the game applies damage on
 [*][url=https://www.jalapenolabs.io/patreon]Support Jalapeno Labs on Patreon[/url]
 [/list]
 Made by [url=https://www.jalapenolabs.io]Jalapeno Labs[/url].
+
+[url=https://www.jalapenolabs.io/patreon][img]https://raw.githubusercontent.com/JalapenoLabs/VolcanoidMods/main/branding/patreon-banner.png[/img][/url]

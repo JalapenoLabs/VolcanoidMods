@@ -20,7 +20,7 @@ Everything on the page comes from the mod's folder:
 | Title | `Content/.manifest.json` `Title` |
 | Tags | `Mod`, the multiplayer tag (`Client` for ClientOnly), then the manifest's `Tags`: what the game's own uploader sends |
 | Cover | `Content/.thumb.jpg` (or `.png`): square, at least 512 x 512 (1024 x 1024 is crisp), at most 1 MB. The page shows it at 268 x 268 and the game's Mods menu shows it too, so the title must read at that size |
-| Description | `Workshop/description.txt`, Steam BBCode, at most 8,000 characters, ending with the GitHub and Patreon links |
+| Description | `Workshop/description.txt`, Steam BBCode, at most 8,000 characters, ending with the GitHub and Patreon links and the Patreon banner |
 | Screenshots | `Workshop/screenshots/*.jpg`, at most 1 MB each, shown in file-name order |
 | Change note | The `Changelog.txt` line for the manifest's `Version` |
 | Item ID | `Workshop/item-id`, written after the first upload |
@@ -31,6 +31,22 @@ moon, cropped square, with the title centred in the brand's Noto Sans Black (150
 under a letter-spaced Noto Sans Bold eyebrow (40 pt, `#9BCB3C`). Rain & Thunderstorms' cover matches it: a showcase
 capture of a lightning bolt striking a fully built drillship, with the title across the sky at the top (120 and 104 pt,
 eyebrow 36 pt) so the drillship and the bolt stay clear.
+
+## The Patreon banner
+
+Every Workshop description ends with a clickable Patreon banner, `branding/patreon-banner.png`, linked to the
+Patreon page:
+
+```
+[url=https://www.jalapenolabs.io/patreon][img]https://raw.githubusercontent.com/JalapenoLabs/VolcanoidMods/main/branding/patreon-banner.png[/img][/url]
+```
+
+Steam keeps no copy of a description's images, so the banner is served from the repository's raw GitHub URL on
+`main`: moving or renaming the file breaks it on every page. It is 1280 x 320 and readable at the 636 px Steam
+shows it at: the Jalapeno Labs circle mark (160 px, with the brand's clear space of half its height) on an
+Ink-to-Surface-Navy gradient with a faint Primary green glow, a letter-spaced Secondary green eyebrow
+("JALAPENO LABS ON PATREON"), a white Noto Sans Bold headline, and a Primary green "Join on Patreon" button.
+The mark and colours come from the brand guide in the jalapenolabs-io repository (`apps/web/brand/`).
 
 ## How uploads work
 

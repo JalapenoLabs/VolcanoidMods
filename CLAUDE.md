@@ -30,6 +30,7 @@ scripts/workshop.py    publish | info | subscribe a mod's Workshop item (Linux, 
 scripts/release.py     Workshop update + signed tag + GitHub release with the mod's zip
 scripts/smoke_test.py  boots the game with a mod's developer capture (Linux; Hyprland-aware)
 tools/workshop-uploader/  C# Steamworks.NET tool that workshop.py builds and runs
+branding/              art every mod's public pages share (the Patreon banner the Workshop descriptions embed)
 docs/                  one document per area of decisions
 .github/workflows/     main.yml: validate + unit tests
 ```
@@ -57,7 +58,8 @@ docs/                  one document per area of decisions
 - **Releases go through `scripts/release.py`**, never the in-game upload button: the button drops the description
   and change note. Commit `Workshop/item-id` after a mod's first upload, or the next upload creates a new item.
 - **Every public page links Patreon** (`https://www.jalapenolabs.io/patreon`) and the GitHub source: the Workshop
-  description, the mod's README and the GitHub release notes.
+  description, the mod's README and the GitHub release notes. A Workshop description ends with the clickable
+  Patreon banner (`branding/patreon-banner.png`).
 - **Keep testable logic Unity-free** (like `Source/Cycle/`), so `Tests/` can compile it as plain .NET in CI.
 - **Never fail silently**: every early return on unexpected state logs, with the `[ModName]` prefix.
 - **C# style**: K&R braces, 4 spaces, file-scoped namespaces, 120-column lines, `// Copyright © 2026 Jalapeno Labs`

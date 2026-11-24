@@ -56,6 +56,7 @@ VolcanoidMods/
 │   ├── release.py            # Workshop update, signed tag and GitHub release in one go
 │   └── smoke_test.py         # boot the game, capture screenshots, restore saves (Linux)
 ├── tools/workshop-uploader/  # the Steamworks uploader workshop.py runs
+├── branding/                # the Patreon banner every Workshop description embeds
 ├── docs/                     # how the game loads mods, toolchain, publishing, per-mod design
 └── .github/workflows/main.yml
 ```
