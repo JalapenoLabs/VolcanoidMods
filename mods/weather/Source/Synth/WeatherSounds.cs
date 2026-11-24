@@ -152,8 +152,9 @@ public static class WeatherSounds {
 
     /// <summary>
     /// The sound of a strike a few hundred metres off, before its thunder rolls: a short tearing rip as the channel
-    /// forms, a hard crack, and a heavy boom that falls in pitch, with a few crackles over it. It is built to have
-    /// weight, low end above all: a burst of bright noise alone sounds like a cymbal being tapped, not a strike.
+    /// forms, a hard crack with an electric zap in it, and a heavy boom that falls in pitch, with a few crackles over
+    /// it. It is built to have weight, low end above all: a burst of bright noise alone sounds like a cymbal being
+    /// tapped, not a strike.
     /// </summary>
     /// <param name="loudness">How loud the strike peaks: kept in proportion to the rolls, which follow it.</param>
     static void AddCloseStrike(ref StormRandom random, float[] left, float[] right, float loudness) {
@@ -211,6 +212,8 @@ public static class WeatherSounds {
                 + thumpWave;
         }
 
+        AddZap(ref random, strikeLeft, strikeRight, ripFrames);
+
         // A few crackles over the boom: short mid-range bursts, not clicks of white noise.
         var crackleFilter = new Biquad(Biquad.Kind.BandPass, 1800, 1.2f, SampleRate);
         int crackleCount = 3 + (int)(random.NextFloat() * 4);
@@ -237,6 +240,33 @@ public static class WeatherSounds {
         for (int index = 0; index < length; index++) {
             left[index] += loudness * (float)Math.Tanh(strikeLeft[index] * gain / loudness);
             right[index] += loudness * (float)Math.Tanh(strikeRight[index] * gain / loudness);
+        }
+    }
+
+    /// <summary>
+    /// The zap at the crack: a buzzy tone diving from the upper mids into the bass in a few hundredths of a second,
+    /// fluttering a little as it goes, the electric edge of the strike. Its buzz is a sawtooth built from harmonics
+    /// kept below 5 kHz, so it buzzes without hissing.
+    /// </summary>
+    static void AddZap(ref StormRandom random, float[] left, float[] right, int start) {
+        const float HighestHarmonic = 5000;
+        float startPitch = random.Range(2200, 3000);
+        float endPitch = random.Range(140, 190);
+        int length = Math.Min(left.Length - start, (int)(0.28f * SampleRate));
+        double phase = 0;
+        for (int offset = 0; offset < length; offset++) {
+            float time = offset / (float)SampleRate;
+            float pitch = endPitch + (startPitch - endPitch) * (float)Math.Exp(-time / 0.045f);
+            phase += 2 * Math.PI * pitch / SampleRate;
+            float buzz = 0;
+            for (int harmonic = 1; harmonic <= 6 && harmonic * pitch < HighestHarmonic; harmonic++) {
+                buzz += (float)Math.Sin(phase * harmonic) / harmonic;
+            }
+            float attack = Math.Min(1, time / 0.002f);
+            float flutter = 0.75f + 0.25f * (float)Math.Sin(2 * Math.PI * 70 * time);
+            float value = buzz * attack * (float)Math.Exp(-time / 0.07f) * flutter * 0.55f;
+            left[start + offset] += value;
+            right[start + offset] += value;
         }
     }
 
