@@ -97,7 +97,7 @@ and thunder (`Synth/`) are generated on a worker thread when a game loads, from 
 | `CloudDeck` | 96 clouds of 7 lit puffs each in a 3.2 km field that drifts on the storm's steady wind and wraps around the camera; they arrive from upwind as cover rises and darken with the storm |
 | `StormWind` | Turns up the terrain grass's waving, and bends the drillships' outdoor smoke downwind through a wind zone of its own |
 | `WindDebris` | Leaves torn from the crowns of the trees around the camera, mostly in gusts, and long wisps of spray that gusts drive across the ground |
-| `RainFall` | Near drops around the camera that collide with the world and splash, and a sparser, wider veil of far drops |
+| `RainFall` | Near drops around the camera that land and splash (see below), and a sparser, wider veil of far drops |
 | `HullRain` | Splashes cast onto the roofs of every drillship within 160 m (they grow with distance so they still show), mist over the roofs in heavy rain, and run-off pouring from the roof edges |
 | `WetSurfaces` | Raises the smoothness of the terrain layers and the drillships' exterior paint with wetness, and restores it exactly |
 | `Puddles` | Puddles on flat, open, non-grassy terrain near the camera, kept clear of lava, that grow with wetness and ripple in the rain |
@@ -114,6 +114,14 @@ camera, so looking up and panning rolled every puff with the mouse while the sky
 puffs are therefore Unity's built-in quad drawn as mesh particles in World alignment, each turned every frame to face
 the camera's position and keep its top to the sky; turning the head changes nothing. (World-aligned billboards were
 tried first and rendered edge-on.)
+
+**Where each drop lands is found once.** A near drop is made with one ray cast along its fall, which finds the
+first solid thing below it (ground, rock, roof, a drillship's hull), or the sea at sea level, and it lives just long
+enough to fall there; its death throws up the splash. That is about 75 rays a frame. Unity's own particle world
+collision did the same job by testing every drop against the world every frame, and cost twelve milliseconds a frame
+in a thunderstorm at the player's spot, whatever the number of drops, the collision shapes or the voxel size (larger
+voxels were slower). Drops with nowhere to land within eight seconds of falling (around a camera high in the air)
+fall as far drops instead, which end in the air without a splash.
 
 **No rain indoors.** The far rain has no collision and the near rain's approximate collision lets drops through thin
 roofs, and particle-trigger kill volumes left drops inside the game's zone shapes. So while the camera is inside an
