@@ -74,7 +74,10 @@ paused and a save does not remember its weather.
 | Sheltered | In a drillship (`BoardedDrillship.IsInside`), a drillship interior zone, a blast shelter or blast mine (`BlastWaveSafeZone`), or under any solid roof (a ray up 120 m against `Layers.MaskExplosionVisibility`) | The storm is outside: muffled sound, no lens drops, no lightning damage, and only a faint flicker of its flashes |
 | Underground | In zones with no surface layer and the underground layer, or in a drillship travelling underground | Nothing at all, not even the darker light |
 
-The surface share eases over 1.5 seconds and the outdoor share over 0.6, so crossing a threshold never snaps.
+Every test is made from the player's body (the roof ray starts at the chest), never the camera: the periscope and
+the cinematic camera look from elsewhere, and a ray from the head in a low cabin starts inside the ceiling, where it
+cannot see it. A new answer must hold for 0.35 seconds before it is taken, so a doorway cannot flicker it. The surface
+share then eases over 1.5 seconds and the outdoor share over 0.6, so crossing a threshold never snaps.
 
 ## Rendering
 
@@ -82,8 +85,9 @@ The storm changes the light falling on the world and adds particles, lights and 
 image, so lamps, lava and glowing COGs keep their strength in the gloom. Nothing ships but one assembly: no asset
 bundle and no custom shader. Every effect is drawn with a copy of one of the game's own materials, found by its
 shader's enabled keywords (`GameMaterials.cs`): the lit smoke particle material for clouds, rain, splashes, spray and
-steam, the unlit glow for bolts, and transparent glass for puddles. Textures (`Art/`) and sounds (`Synth/`) are
-generated on a worker thread when a game loads, from fixed seeds.
+steam, the unlit glow for the sparks, and transparent glass for puddles. The bolts themselves draw with Unity's
+built-in `Sprites/Default`, which the game ships and which takes no fog (see below). Textures (`Art/`) and the wind
+and thunder (`Synth/`) are generated on a worker thread when a game loads, from fixed seeds; the rain is recorded.
 
 | Part | What it does |
 | --- | --- |
@@ -97,13 +101,29 @@ generated on a worker thread when a game loads, from fixed seeds.
 | `HullRain` | Splashes cast onto the roofs of every drillship within 160 m (they grow with distance so they still show), mist over the roofs in heavy rain, and run-off pouring from the roof edges |
 | `WetSurfaces` | Raises the smoothness of the terrain layers and the drillships' exterior paint with wetness, and restores it exactly |
 | `Puddles` | Puddles on flat, open, non-grassy terrain near the camera, kept clear of lava, that grow with wetness and ripple in the rain |
-| `LensRain` | Drops on a screen overlay under the HUD, out in the open only, more when looking up; hidden with the HUD |
+| `LensRain` | Drops on a screen overlay under the HUD, out in the open only, more when looking up; hidden with the HUD. Each takes one of sixteen shapes (mostly clear, a soft U of light along the bottom, some with a trail), is mostly small and never more than 55% opaque |
 | `LightningStrikes` | Brings each scheduled strike down: bolt, a light under the cloud base and one on the ground, a directional flash, thunder and damage |
 | `StormSea` | Raises the ocean's wave amplitude and length, swings the swell before the wind, and adds foam and chop |
 | `LavaSteam` | Steam columns over every surface lava pool, with a local fog volume (priority 11) that makes them hard to see through; always on gently, far stronger in rain |
 
 `DrillshipExteriors` finds every drillship's exterior renderers (its paint system separates exterior from interior)
 every 8 seconds, for `HullRain` and `WetSurfaces`.
+
+**Cloud puffs stay upright in the world.** Every one of Unity's billboard alignments takes a puff's up from the
+camera, so looking up and panning rolled every puff with the mouse while the sky behind it turned the other way. The
+puffs are therefore Unity's built-in quad drawn as mesh particles in World alignment, each turned every frame to face
+the camera's position and keep its top to the sky; turning the head changes nothing. (World-aligned billboards were
+tried first and rendered edge-on.)
+
+**No rain indoors.** The far rain has no collision and the near rain's approximate collision lets drops through thin
+roofs, and particle-trigger kill volumes left drops inside the game's zone shapes. So while the camera is inside an
+enclosed space (an interior zone's precise area, or a shelter's safe collider; `ShelterVolumes`) the rain's renderers
+are off. It keeps falling unseen, so it shows the moment the player steps out.
+
+**Distant bolts.** Strikes land anywhere on the island, mostly a kilometre or more away, and every particle shader
+takes the game's fog, which at storm density hides 98% of what lies that far. The channels therefore draw with
+`Sprites/Default` (no fog, still depth-tested, an HDR colour so the bloom catches them) and widen by 7 m per kilometre
+of distance to stay several pixels wide.
 
 Lightning's lights cast no shadows (URP gives shadows to one directional light, the sun), so they would shine
 straight through rock and hulls. Every flash light is therefore scaled by the player's exposure: full strength
