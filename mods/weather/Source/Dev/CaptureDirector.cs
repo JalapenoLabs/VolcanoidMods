@@ -301,6 +301,9 @@ internal sealed class CaptureDirector : MonoBehaviour {
                 case "island":
                     views.Add(new View(name, () => LookTowardsVolcano(focus), IslandViewFieldOfView));
                     break;
+                case "shore":
+                    views.Add(new View(name, () => FromShore(playerPosition), IslandViewFieldOfView));
+                    break;
                 case "sky":
                     views.Add(new View(name, () => LookUpAtClouds(focus), IslandViewFieldOfView));
                     break;
@@ -345,6 +348,20 @@ internal sealed class CaptureDirector : MonoBehaviour {
     }
 
     /// <summary>High above the player, looking across the island towards the volcano, its highest ground.</summary>
+    /// <summary>
+    /// Standing where the player stands, at head height, looking across at the volcano and a little up into the
+    /// storm: the view a player has of a strike over the island, without the HUD or the gun in hand.
+    /// </summary>
+    static Pose FromShore(Vector3 playerPosition) {
+        Vector3 eye = playerPosition + Vector3.up * 1.8f;
+        Vector3 heading = Vector3.ProjectOnPlane(HighestGround() - eye, Vector3.up);
+        if (heading.sqrMagnitude < 1) {
+            heading = Vector3.forward;
+        }
+        Vector3 forward = Quaternion.AngleAxis(-8, Vector3.Cross(Vector3.up, heading)) * heading.normalized;
+        return new Pose(eye, Quaternion.LookRotation(forward));
+    }
+
     static Pose LookTowardsVolcano(Vector3 playerPosition) {
         Vector3 eye = playerPosition + Vector3.up * IslandViewHeight;
         Vector3 peak = HighestGround();

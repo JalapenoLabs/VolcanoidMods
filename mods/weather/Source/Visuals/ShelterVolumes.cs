@@ -17,6 +17,11 @@ namespace JalapenoLabs.Weather.Visuals;
 /// stepping out of the door shows it at once. The spaces are the shapes the game already gives them: an interior zone's
 /// precise area (the colliders the game uses to decide that a player is inside), and a shelter's safe collider. An open
 /// overhang is not one, so rain still shows past its edge.
+///
+/// Collider.ClosestPoint, the usual test for a point inside a shape, cannot test a concave mesh: it hands back the
+/// point it was given, so every point anywhere counted as inside, and a drillship whose cabin is such a mesh hid the
+/// rain all over the island. A concave mesh is tested against its own bounding box instead, held in the mesh's own
+/// space so it turns with the drillship and stays tight around a box-like cabin whichever way the ship faces.
 /// </summary>
 internal sealed class ShelterVolumes {
     /// <summary>Only spaces this close to the camera are looked at.</summary>
@@ -54,7 +59,7 @@ internal sealed class ShelterVolumes {
     }
 
     void AddIfNear(Collider collider, Vector3 centre) {
-        if (collider != null && (collider.ClosestPoint(centre) - centre).sqrMagnitude < Reach * Reach) {
+        if (collider != null && collider.bounds.SqrDistance(centre) < Reach * Reach) {
             volumes.Add(collider);
         }
     }
@@ -62,11 +67,21 @@ internal sealed class ShelterVolumes {
     /// <summary>The enclosed space holding a point (the camera), or null when it is out under the sky.</summary>
     public Collider Holding(Vector3 point) {
         foreach (Collider volume in volumes) {
-            // ClosestPoint gives back the point itself when it lies inside the shape.
-            if (volume != null && (volume.ClosestPoint(point) - point).sqrMagnitude < 0.0001f) {
+            if (volume != null && volume.enabled && Contains(volume, point)) {
                 return volume;
             }
         }
         return null;
+    }
+
+    static bool Contains(Collider volume, Vector3 point) {
+        if (volume is MeshCollider mesh && !mesh.convex) {
+            if (mesh.sharedMesh == null) {
+                return false;
+            }
+            return mesh.sharedMesh.bounds.Contains(mesh.transform.InverseTransformPoint(point));
+        }
+        // For every other shape, ClosestPoint gives back the point itself when it lies inside.
+        return (volume.ClosestPoint(point) - point).sqrMagnitude < 0.0001f;
     }
 }
